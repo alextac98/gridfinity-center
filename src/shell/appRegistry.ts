@@ -13,7 +13,7 @@ export const apps = [
       "Design printable labels for bins, drawers, and small part organizers.",
     icon: Tag,
     Component: LabelMakerApp,
-    accent: "orange",
+    accent: "blue",
   },
   {
     id: "bin-generator",
@@ -23,7 +23,7 @@ export const apps = [
       "Configure parametric Gridfinity bins, compartments, scoops, and magnet holes.",
     icon: Box,
     Component: BinGeneratorApp,
-    accent: "green",
+    accent: "blue",
   },
   {
     id: "grid-generator",
@@ -43,7 +43,7 @@ export const apps = [
       "Inspect STL and 3MF files, review print orientation, and compare generated model variants.",
     icon: Cuboid,
     comingSoon: true,
-    accent: "green",
+    accent: "blue",
   },
 ] as const satisfies readonly GridfinityAppConfig[];
 

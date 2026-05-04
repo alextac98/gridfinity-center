@@ -9,9 +9,9 @@
   --border: rgba(23, 33, 31, 0.1);
   --border-strong: rgba(23, 33, 31, 0.12);
   --hover: #f4f0e8;
-  --active: #dbe8dd;
-  --brand-accent: #1f6656;
-  --eyebrow: #b34d27;
+  --active: #e4edf5;
+  --brand-accent: #315f8a;
+  --eyebrow: #315f8a;
   --button-solid: #17211f;
   --button-solid-text: #fffaf2;
   --shadow: 0 12px 38px rgba(49, 66, 63, 0.07);
@@ -22,10 +22,10 @@
   --grid-line: rgba(23, 33, 31, 0.045);
   --dash: rgba(23, 33, 31, 0.18);
   --mark-shadow: 0 20px 50px rgba(23, 33, 31, 0.12);
-  --accent-green: #1f6656;
-  --accent-green-bg: rgba(219, 232, 221, 0.88);
-  --accent-orange: #b34d27;
-  --accent-orange-bg: #fff1e8;
+  --accent-green: #315f8a;
+  --accent-green-bg: #e4edf5;
+  --accent-orange: #315f8a;
+  --accent-orange-bg: #e4edf5;
   --accent-blue: #315f8a;
   --accent-blue-bg: #e4edf5;
   --output-strong: #263a36;
@@ -44,36 +44,36 @@
 }
 
 .darkTheme {
-  --app-bg: #101816;
-  --surface: #17211f;
-  --field: #101816;
-  --text: #edf3ef;
-  --text-soft: #edf3ef;
-  --muted: #a5b5af;
-  --panel-heading: #cedbd5;
-  --border: rgba(237, 243, 239, 0.1);
-  --border-strong: rgba(237, 243, 239, 0.12);
-  --hover: #263a36;
-  --active: #24413a;
-  --brand-accent: #69a997;
-  --eyebrow: #ff9b71;
-  --button-solid: #edf3ef;
-  --button-solid-text: #101816;
-  --shadow: 0 12px 38px rgba(0, 0, 0, 0.22);
-  --topbar-shadow: 0 12px 38px rgba(0, 0, 0, 0.22);
-  --field-sheen-start: rgba(237, 243, 239, 0.08);
-  --field-sheen-end: rgba(237, 243, 239, 0.03);
-  --preview-bg: #111b19;
-  --grid-line: rgba(237, 243, 239, 0.055);
-  --dash: rgba(237, 243, 239, 0.18);
-  --mark-shadow: 0 20px 50px rgba(0, 0, 0, 0.28);
-  --accent-green: #8fd4c1;
-  --accent-green-bg: rgba(36, 65, 58, 0.9);
-  --accent-orange: #ff9b71;
-  --accent-orange-bg: #3b261e;
-  --accent-blue: #9dc9f0;
-  --accent-blue-bg: #1d3040;
-  --output-strong: #edf3ef;
+  --app-bg: #080808;
+  --surface: #141414;
+  --field: #050505;
+  --text: #e6e1cf;
+  --text-soft: #c9c3b2;
+  --muted: #8a8a8a;
+  --panel-heading: #c7c0ad;
+  --border: rgba(230, 225, 207, 0.1);
+  --border-strong: rgba(230, 225, 207, 0.16);
+  --hover: #1a1a1a;
+  --active: #202020;
+  --brand-accent: #59c2ff;
+  --eyebrow: #59c2ff;
+  --button-solid: #59c2ff;
+  --button-solid-text: #050505;
+  --shadow: 0 14px 42px rgba(0, 0, 0, 0.36);
+  --topbar-shadow: 0 14px 42px rgba(0, 0, 0, 0.36);
+  --field-sheen-start: rgba(230, 225, 207, 0.07);
+  --field-sheen-end: rgba(230, 225, 207, 0.02);
+  --preview-bg: #050505;
+  --grid-line: rgba(230, 225, 207, 0.045);
+  --dash: rgba(89, 194, 255, 0.24);
+  --mark-shadow: 0 22px 54px rgba(0, 0, 0, 0.42);
+  --accent-green: #59c2ff;
+  --accent-green-bg: rgba(22, 73, 103, 0.72);
+  --accent-orange: #59c2ff;
+  --accent-orange-bg: rgba(22, 73, 103, 0.72);
+  --accent-blue: #59c2ff;
+  --accent-blue-bg: rgba(22, 73, 103, 0.72);
+  --output-strong: #e6e1cf;
 }
 
 .sidebar {
