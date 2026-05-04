@@ -12,6 +12,11 @@
   grid-template-columns: 76px minmax(0, 1fr);
 }
 
+.darkTheme {
+  background: #101816;
+  color: #edf3ef;
+}
+
 .sidebar {
   display: flex;
   flex-direction: column;
@@ -25,9 +30,11 @@
 
 .brand,
 .sidebarHeader,
+.sidebarControls,
 .appTab,
 .activeTab,
-.sidebarToggle,
+.sidebarIconButton,
+.themeToggle,
 .topbar,
 .topbarActions,
 .panelHeader,
@@ -52,7 +59,11 @@
   font-weight: 760;
 }
 
-.sidebarToggle {
+.sidebarControls {
+  gap: 8px;
+}
+
+.sidebarIconButton {
   flex: 0 0 auto;
   justify-content: center;
   width: 38px;
@@ -64,7 +75,7 @@
   cursor: pointer;
 }
 
-.sidebarToggle:hover {
+.sidebarIconButton:hover {
   background: #f4f0e8;
   border-color: rgba(31, 102, 86, 0.34);
 }
@@ -112,12 +123,17 @@
   width: 48px;
 }
 
+.collapsedSidebar .sidebarControls {
+  flex-direction: column;
+}
+
 .collapsedSidebar .brand {
   display: none;
 }
 
 .collapsedSidebar .appTab span,
-.collapsedSidebar .activeTab span {
+.collapsedSidebar .activeTab span,
+.collapsedSidebar .themeToggle span {
   display: none;
 }
 
@@ -135,6 +151,41 @@
 
 .collapsedSidebar .activeTab {
   box-shadow: inset 0 -3px 0 #1f6656;
+}
+
+.sidebarBottom {
+  margin-top: auto;
+}
+
+.themeToggle {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 46px;
+  gap: 10px;
+  border: 1px solid rgba(23, 33, 31, 0.12);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: #fffaf2;
+  color: #263a36;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 680;
+}
+
+.themeToggle:hover {
+  border-color: rgba(31, 102, 86, 0.34);
+  background: #f4f0e8;
+}
+
+.collapsedSidebar .sidebarBottom {
+  width: 48px;
+}
+
+.collapsedSidebar .themeToggle {
+  justify-content: center;
+  width: 48px;
+  min-height: 48px;
+  padding: 0;
 }
 
 .eyebrow {
@@ -378,6 +429,115 @@
   margin-top: 4px;
 }
 
+.darkTheme .sidebar,
+.darkTheme .topbar,
+.darkTheme .panel,
+.darkTheme .preview {
+  border-color: rgba(237, 243, 239, 0.1);
+  background: #17211f;
+  box-shadow: 0 12px 38px rgba(0, 0, 0, 0.22);
+}
+
+.darkTheme .brand,
+.darkTheme .topbar h1 {
+  color: #edf3ef;
+}
+
+.darkTheme .sidebarIconButton,
+.darkTheme .themeToggle,
+.darkTheme .topbarActions button {
+  border-color: rgba(237, 243, 239, 0.12);
+  background: #1f2e2b;
+  color: #edf3ef;
+}
+
+.darkTheme .sidebarIconButton:hover,
+.darkTheme .themeToggle:hover,
+.darkTheme .topbarActions button:hover,
+.darkTheme .appTab:hover {
+  border-color: rgba(105, 169, 151, 0.42);
+  background: #263a36;
+}
+
+.darkTheme .appTab {
+  color: #bac8c2;
+}
+
+.darkTheme .activeTab {
+  border-color: rgba(105, 169, 151, 0.42);
+  background: #24413a;
+  color: #edf3ef;
+  box-shadow: inset 3px 0 0 #69a997;
+}
+
+.darkTheme .collapsedSidebar .activeTab {
+  box-shadow: inset 0 -3px 0 #69a997;
+}
+
+.darkTheme .eyebrow {
+  color: #ff9b71;
+}
+
+.darkTheme .topbar p:last-child,
+.darkTheme .placeholderField span,
+.darkTheme .previewSurface p,
+.darkTheme .outputList span {
+  color: #a5b5af;
+}
+
+.darkTheme .panelHeader {
+  color: #cedbd5;
+}
+
+.darkTheme .placeholderField div,
+.darkTheme .outputList div {
+  border-color: rgba(237, 243, 239, 0.1);
+  background:
+    linear-gradient(90deg, rgba(237, 243, 239, 0.08), rgba(237, 243, 239, 0.03)),
+    #101816;
+}
+
+.darkTheme .previewToolbar {
+  border-bottom-color: rgba(237, 243, 239, 0.1);
+}
+
+.darkTheme .previewToolbar button,
+.darkTheme .outputList button {
+  background: #edf3ef;
+  color: #101816;
+}
+
+.darkTheme .previewSurface {
+  background:
+    linear-gradient(rgba(237, 243, 239, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(237, 243, 239, 0.055) 1px, transparent 1px),
+    #111b19;
+}
+
+.darkTheme .previewSurface::after {
+  border-color: rgba(237, 243, 239, 0.18);
+}
+
+.darkTheme .previewMark {
+  color: #8fd4c1;
+  background: rgba(36, 65, 58, 0.9);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.28);
+}
+
+.darkTheme .appFrame[data-accent="orange"] .previewMark {
+  color: #ff9b71;
+  background: #3b261e;
+}
+
+.darkTheme .appFrame[data-accent="blue"] .previewMark {
+  color: #9dc9f0;
+  background: #1d3040;
+}
+
+.darkTheme .outputList strong {
+  color: #edf3ef;
+}
+
 @media (max-width: 1120px) {
   .page {
     grid-template-columns: 1fr;
@@ -423,6 +583,16 @@
   .collapsedSidebar .appTab,
   .collapsedSidebar .activeTab {
     width: auto;
+  }
+
+  .sidebarBottom,
+  .collapsedSidebar .sidebarBottom {
+    width: auto;
+    margin-top: 14px;
+  }
+
+  .collapsedSidebar .themeToggle {
+    width: 100%;
   }
 
   .appFrame {

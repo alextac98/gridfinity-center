@@ -7,14 +7,16 @@ import {
   Download,
   Grid3X3,
   Layers3,
+  Moon,
   PanelLeft,
   PanelLeftClose,
   PanelLeftOpen,
   Save,
   SlidersHorizontal,
+  Sun,
   Tag,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import styles from "./page.module.css";
 
 const apps = [
@@ -58,19 +60,41 @@ const apps = [
 
 const placeholderRows = ["Width", "Depth", "Height", "Style"];
 
+function getInitialTheme(): "light" | "dark" {
+  if (typeof window === "undefined") {
+    return "light";
+  }
+
+  const storedTheme = window.localStorage.getItem("gridfinity-theme");
+
+  if (storedTheme === "light" || storedTheme === "dark") {
+    return storedTheme;
+  }
+
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+}
+
 export default function Home() {
   const [activeAppId, setActiveAppId] = useState<(typeof apps)[number]["id"]>(
     apps[0].id,
   );
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [theme, setTheme] = useState<"light" | "dark">(getInitialTheme);
   const activeApp = apps.find((app) => app.id === activeAppId) ?? apps[0];
   const ActiveIcon = activeApp.icon;
+  const isDark = theme === "dark";
+
+  useEffect(() => {
+    window.localStorage.setItem("gridfinity-theme", theme);
+  }, [theme]);
 
   return (
     <main
       className={`${styles.page} ${
         isSidebarCollapsed ? styles.collapsedPage : ""
-      }`}
+      } ${isDark ? styles.darkTheme : ""}`}
     >
       <aside
         className={`${styles.sidebar} ${
@@ -83,21 +107,25 @@ export default function Home() {
             <span>Gridfinity Center</span>
           </a>
 
-          <button
-            aria-label={
-              isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
-            }
-            className={styles.sidebarToggle}
-            onClick={() => setIsSidebarCollapsed((isCollapsed) => !isCollapsed)}
-            title={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            type="button"
-          >
-            {isSidebarCollapsed ? (
-              <PanelLeftOpen aria-hidden="true" size={18} />
-            ) : (
-              <PanelLeftClose aria-hidden="true" size={18} />
-            )}
-          </button>
+          <div className={styles.sidebarControls}>
+            <button
+              aria-label={
+                isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
+              }
+              className={styles.sidebarIconButton}
+              onClick={() =>
+                setIsSidebarCollapsed((isCollapsed) => !isCollapsed)
+              }
+              title={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              type="button"
+            >
+              {isSidebarCollapsed ? (
+                <PanelLeftOpen aria-hidden="true" size={18} />
+              ) : (
+                <PanelLeftClose aria-hidden="true" size={18} />
+              )}
+            </button>
+          </div>
         </div>
 
         <div className={styles.appTabs} role="tablist" aria-label="Apps">
@@ -122,6 +150,23 @@ export default function Home() {
               </button>
             );
           })}
+        </div>
+
+        <div className={styles.sidebarBottom}>
+          <button
+            aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+            className={styles.themeToggle}
+            onClick={() => setTheme(isDark ? "light" : "dark")}
+            title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+            type="button"
+          >
+            {isDark ? (
+              <Sun aria-hidden="true" size={18} />
+            ) : (
+              <Moon aria-hidden="true" size={18} />
+            )}
+            <span>{isDark ? "Light mode" : "Dark mode"}</span>
+          </button>
         </div>
       </aside>
 
