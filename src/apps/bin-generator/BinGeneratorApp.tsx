@@ -44,6 +44,9 @@ const numberFields: Record<
   wallThicknessMm: { label: "Wall thickness", min: 0, max: 4, step: 0.05, suffix: "mm" },
 };
 
+const defaultModelPath = "/default-models/default-gridfinity-bin.stl";
+const defaultParamsKey = createParamsKey(defaultGridfinityBinParameters);
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
@@ -104,20 +107,39 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
     ) as Record<NumberField, string>,
   );
   const [stl, setStl] = useState<Uint8Array>();
-  const [renderStatus, setRenderStatus] = useState("Preparing OpenSCAD worker");
+  const defaultStlRef = useRef<Uint8Array | null>(null);
+  const [generatedParamsKey, setGeneratedParamsKey] = useState("");
+  const [renderStatus, setRenderStatus] = useState("Loading default preview");
   const [renderError, setRenderError] = useState("");
   const [isRendering, setIsRendering] = useState(false);
   const renderSequenceRef = useRef(0);
   const workerRef = useRef<Worker | null>(null);
   const latestParamsRef = useRef(defaultGridfinityBinParameters);
-  const latestParamsKeyRef = useRef(createParamsKey(defaultGridfinityBinParameters));
+  const latestParamsKeyRef = useRef(defaultParamsKey);
   const activeRequestRef = useRef<number | null>(null);
   const activeParamsKeyRef = useRef("");
   const isWorkerRenderingRef = useRef(false);
   const queuedRenderRef = useRef(false);
-  const renderTimerRef = useRef<number | null>(null);
 
   const scadSnippet = useMemo(() => createBinScadSnippet(params), [params]);
+  const currentParamsKey = useMemo(() => createParamsKey(params), [params]);
+  const isLoadingDefaultPreview =
+    currentParamsKey === defaultParamsKey &&
+    !stl &&
+    !renderError &&
+    renderStatus === "Loading default preview";
+  const isPreviewCurrent = Boolean(stl && generatedParamsKey === currentParamsKey && !renderError);
+  const previewStatus = renderError
+    ? "Render failed"
+    : isRendering
+      ? "Rendering"
+      : isLoadingDefaultPreview
+        ? "Loading default preview"
+      : isPreviewCurrent
+        ? "OpenSCAD preview ready"
+        : stl
+          ? "Changes pending"
+          : "Ready to generate";
   const dimensions = useMemo(
     () => ({
       width: params.widthUnits * GRIDFINITY_GRID_MM,
@@ -132,6 +154,47 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
 
     return () => window.clearTimeout(mountTimer);
   }, []);
+
+  useEffect(() => {
+    if (!hasMounted) {
+      return;
+    }
+
+    let cancelled = false;
+
+    fetch(defaultModelPath)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Could not load default STL: ${response.status}`);
+        }
+
+        return response.arrayBuffer();
+      })
+      .then((buffer) => {
+        if (cancelled) {
+          return;
+        }
+
+        const bytes = new Uint8Array(buffer);
+        defaultStlRef.current = bytes;
+
+        setStl(bytes);
+        setGeneratedParamsKey(defaultParamsKey);
+        setRenderStatus("Default preview ready");
+        setRenderError("");
+      })
+      .catch((error: unknown) => {
+        console.error("Default STL failed to load.", error);
+
+        if (!cancelled) {
+          setRenderStatus("Ready to generate");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasMounted]);
 
   const startRender = useCallback((nextParams: GridfinityBinParameters) => {
     const worker = workerRef.current;
@@ -162,19 +225,13 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
   }, []);
 
   const requestRender = useCallback(
-    (nextParams: GridfinityBinParameters, delayMs = 250) => {
+    (nextParams: GridfinityBinParameters) => {
       latestParamsRef.current = nextParams;
       latestParamsKeyRef.current = createParamsKey(nextParams);
-      setStl(undefined);
       setRenderError("");
 
-      if (renderTimerRef.current !== null) {
-        window.clearTimeout(renderTimerRef.current);
-        renderTimerRef.current = null;
-      }
-
       if (!workerRef.current) {
-        setIsRendering(true);
+        setIsRendering(false);
         setRenderStatus("Preparing OpenSCAD worker");
         return;
       }
@@ -187,11 +244,8 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
       }
 
       setIsRendering(true);
-      setRenderStatus("OpenSCAD render queued");
-      renderTimerRef.current = window.setTimeout(() => {
-        renderTimerRef.current = null;
-        startRender(latestParamsRef.current);
-      }, delayMs);
+      setRenderStatus("Rendering OpenSCAD STL");
+      startRender(latestParamsRef.current);
     },
     [startRender],
   );
@@ -208,7 +262,7 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
       isWorkerRenderingRef.current = false;
       activeRequestRef.current = null;
 
-      if (queuedRenderRef.current || latestParamsKeyRef.current !== activeParamsKeyRef.current) {
+      if (queuedRenderRef.current) {
         queuedRenderRef.current = false;
         startRender(latestParamsRef.current);
         return true;
@@ -234,6 +288,7 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
         }
 
         setStl(new Uint8Array(message.stl));
+        setGeneratedParamsKey(activeParamsKeyRef.current);
         setRenderStatus("OpenSCAD preview ready");
         setRenderError("");
         setIsRendering(false);
@@ -246,7 +301,6 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
         return;
       }
 
-      setStl(undefined);
       setRenderError("OpenSCAD could not generate this bin. Check the browser console for details.");
       setRenderStatus("OpenSCAD render failed");
       setIsRendering(false);
@@ -266,11 +320,6 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
     worker.addEventListener("error", handleWorkerError);
 
     return () => {
-      if (renderTimerRef.current !== null) {
-        window.clearTimeout(renderTimerRef.current);
-        renderTimerRef.current = null;
-      }
-
       worker.removeEventListener("message", handleMessage);
       worker.removeEventListener("error", handleWorkerError);
       worker.terminate();
@@ -279,16 +328,6 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
       activeRequestRef.current = null;
     };
   }, [hasMounted, startRender]);
-
-  useEffect(() => {
-    if (!hasMounted) {
-      return;
-    }
-
-    const renderTimer = window.setTimeout(() => requestRender(params), 0);
-
-    return () => window.clearTimeout(renderTimer);
-  }, [hasMounted, params, requestRender]);
 
   const commitNumberField = (field: NumberField) => {
     const config = numberFields[field];
@@ -300,6 +339,7 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
       config.step >= 1 ? String(Math.round(nextValue)) : String(Number(nextValue.toFixed(2)));
 
     setDraft((current) => ({ ...current, [field]: normalized }));
+    setRenderError("");
     setParams((current) => ({
       ...current,
       [field]: config.step >= 1 ? Math.round(nextValue) : Number(normalized),
@@ -307,7 +347,15 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
   };
 
   const reset = () => {
+    setRenderError("");
     setParams(defaultGridfinityBinParameters);
+    setGeneratedParamsKey(defaultParamsKey);
+    setRenderStatus(defaultStlRef.current ? "Default preview ready" : "Loading default preview");
+
+    if (defaultStlRef.current) {
+      setStl(defaultStlRef.current);
+    }
+
     setDraft(
       Object.fromEntries(
         Object.keys(numberFields).map((key) => [
@@ -390,12 +438,13 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
             <span>Lip style</span>
             <select
               value={params.lipStyle}
-              onChange={(event) =>
+              onChange={(event) => {
+                setRenderError("");
                 setParams((current) => ({
                   ...current,
                   lipStyle: event.target.value as GridfinityBinParameters["lipStyle"],
-                }))
-              }
+                }));
+              }}
             >
               <option value="normal">Normal</option>
               <option value="reduced">Reduced</option>
@@ -408,12 +457,13 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
             <span>Label shelf</span>
             <select
               value={params.labelStyle}
-              onChange={(event) =>
+              onChange={(event) => {
+                setRenderError("");
                 setParams((current) => ({
                   ...current,
                   labelStyle: event.target.value as GridfinityBinParameters["labelStyle"],
-                }))
-              }
+                }));
+              }}
             >
               <option value="disabled">Disabled</option>
               <option value="normal">Normal</option>
@@ -425,12 +475,13 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
             <span>Label position</span>
             <select
               value={params.labelPosition}
-              onChange={(event) =>
+              onChange={(event) => {
+                setRenderError("");
                 setParams((current) => ({
                   ...current,
                   labelPosition: event.target.value as GridfinityBinParameters["labelPosition"],
-                }))
-              }
+                }));
+              }}
             >
               <option value="left">Left</option>
               <option value="center">Center</option>
@@ -442,12 +493,13 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
             <span>Finger slide</span>
             <select
               value={params.fingerslide}
-              onChange={(event) =>
+              onChange={(event) => {
+                setRenderError("");
                 setParams((current) => ({
                   ...current,
                   fingerslide: event.target.value as GridfinityBinParameters["fingerslide"],
-                }))
-              }
+                }));
+              }}
             >
               <option value="none">None</option>
               <option value="rounded">Rounded</option>
@@ -460,9 +512,10 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
               <input
                 type="checkbox"
                 checked={params.magnets}
-                onChange={(event) =>
-                  setParams((current) => ({ ...current, magnets: event.target.checked }))
-                }
+                onChange={(event) => {
+                  setRenderError("");
+                  setParams((current) => ({ ...current, magnets: event.target.checked }));
+                }}
               />
               <span>Magnets</span>
             </label>
@@ -470,9 +523,10 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
               <input
                 type="checkbox"
                 checked={params.screws}
-                onChange={(event) =>
-                  setParams((current) => ({ ...current, screws: event.target.checked }))
-                }
+                onChange={(event) => {
+                  setRenderError("");
+                  setParams((current) => ({ ...current, screws: event.target.checked }));
+                }}
               />
               <span>Screws</span>
             </label>
@@ -480,18 +534,34 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
               <input
                 type="checkbox"
                 checked={params.filledIn}
-                onChange={(event) =>
-                  setParams((current) => ({ ...current, filledIn: event.target.checked }))
-                }
+                onChange={(event) => {
+                  setRenderError("");
+                  setParams((current) => ({ ...current, filledIn: event.target.checked }));
+                }}
               />
               <span>Solid block</span>
             </label>
           </div>
 
-          <button className={styles.secondaryButton} type="button" onClick={reset}>
-            <RotateCcw aria-hidden="true" size={16} />
-            Reset
-          </button>
+          <div className={styles.actionRow}>
+            <button
+              className={styles.generateButton}
+              disabled={isRendering}
+              onClick={() => requestRender(params)}
+              type="button"
+            >
+              Generate
+            </button>
+            <button
+              aria-label="Reset Model"
+              className={styles.resetIconButton}
+              onClick={reset}
+              title="Reset Model"
+              type="button"
+            >
+              <RotateCcw aria-hidden="true" size={16} />
+            </button>
+          </div>
         </div>
       </section>
 
@@ -500,13 +570,14 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
           <span>Bin preview</span>
           <div className={styles.toolbarStatus}>
             <Layers3 aria-hidden="true" size={16} />
-            {renderError ? "Render failed" : isRendering ? "Rendering" : renderStatus}
+            {previewStatus}
           </div>
         </div>
         <OpenScadPreview
           stl={stl}
           errorMessage={renderError}
-          loadingMessage={renderStatus}
+          isLoading={isRendering || isLoadingDefaultPreview}
+          loadingMessage={isRendering || isLoadingDefaultPreview ? renderStatus : undefined}
         />
       </section>
 
@@ -532,7 +603,7 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
           </div>
           <button
             type="button"
-            disabled={!stl}
+            disabled={!isPreviewCurrent}
             onClick={() =>
               stl &&
               downloadBlob(

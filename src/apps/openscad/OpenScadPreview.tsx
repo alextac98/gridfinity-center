@@ -28,6 +28,7 @@ import styles from "./openscad-preview.module.css";
 type OpenScadPreviewProps = {
   stl?: Uint8Array;
   errorMessage?: string;
+  isLoading?: boolean;
   loadingMessage?: string;
 };
 
@@ -169,7 +170,12 @@ function createStlMesh(bytes: Uint8Array, theme: PreviewTheme) {
   return mesh;
 }
 
-export function OpenScadPreview({ stl, errorMessage, loadingMessage }: OpenScadPreviewProps) {
+export function OpenScadPreview({
+  stl,
+  errorMessage,
+  isLoading = false,
+  loadingMessage,
+}: OpenScadPreviewProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const orientationHostRef = useRef<HTMLDivElement>(null);
   const cameraRef = useRef<PerspectiveCamera | null>(null);
@@ -441,30 +447,39 @@ export function OpenScadPreview({ stl, errorMessage, loadingMessage }: OpenScadP
 
   const viewerErrorMessage = viewerError && viewerError.stl === stl ? viewerError.message : "";
   const visibleError = errorMessage || viewerErrorMessage;
+  const showOverlay = Boolean(visibleError) || isLoading || !stl;
 
   return (
     <div className={styles.previewHost}>
       <div ref={hostRef} className={styles.canvasHost} />
-      {visibleError || !stl ? (
+      {showOverlay ? (
         <div className={styles.previewOverlay} role={visibleError ? "alert" : "status"}>
           <div className={styles.previewDialog}>
-            <div className={visibleError ? styles.errorIcon : styles.loadingIcon} aria-hidden="true">
-              {visibleError ? <TriangleAlert size={22} /> : <LoaderCircle size={22} />}
-            </div>
+            {visibleError || isLoading ? (
+              <div className={visibleError ? styles.errorIcon : styles.loadingIcon} aria-hidden="true">
+                {visibleError ? <TriangleAlert size={22} /> : <LoaderCircle size={22} />}
+              </div>
+            ) : null}
             <strong>
-              {visibleError ? "OpenSCAD could not generate a preview" : "Generating OpenSCAD preview"}
+              {visibleError
+                ? "OpenSCAD could not generate a preview"
+                : isLoading
+                  ? "Generating OpenSCAD preview"
+                  : "No preview generated"}
             </strong>
             <span>
               {visibleError
                 ? "Adjust the model settings or reset the bin. Technical details were written to the browser console."
-                : loadingMessage ?? "The exact STL model will appear when rendering finishes."}
+                : isLoading
+                  ? loadingMessage ?? "The exact STL model will appear when rendering finishes."
+                  : loadingMessage ?? "Click Generate to create an exact STL preview."}
             </span>
           </div>
         </div>
       ) : null}
       <div
         className={`${styles.orientationWidget} ${
-          visibleError || !stl ? styles.orientationWidgetHidden : ""
+          showOverlay ? styles.orientationWidgetHidden : ""
         }`}
         aria-label="View orientation controls"
       >

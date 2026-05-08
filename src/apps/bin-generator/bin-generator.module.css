@@ -25,9 +25,10 @@
 .panelHeader,
 .previewToolbar,
 .toolbarStatus,
-.secondaryButton,
-.outputList button,
-.sourceBox > div {
+.actionRow,
+.generateButton,
+.resetIconButton,
+.outputList button {
   display: flex;
   align-items: center;
 }
@@ -150,7 +151,8 @@
   accent-color: var(--brand-accent);
 }
 
-.secondaryButton,
+.generateButton,
+.resetIconButton,
 .outputList button {
   justify-content: center;
   gap: 8px;
@@ -166,12 +168,31 @@
   font-weight: 740;
 }
 
-.secondaryButton {
-  width: 100%;
+.actionRow {
+  gap: 8px;
   margin-top: 3px;
+}
+
+.generateButton {
+  flex: 1;
+  border: 1px solid color-mix(in srgb, var(--brand-accent) 24%, transparent);
+  background: var(--brand-accent);
+  color: #03110f;
+}
+
+.resetIconButton {
+  flex: 0 0 38px;
+  width: 38px;
+  padding: 0;
   border: 1px solid color-mix(in srgb, var(--brand-accent) 24%, transparent);
   background: color-mix(in srgb, var(--brand-accent) 13%, var(--surface));
   color: var(--text);
+}
+
+.generateButton:disabled,
+.resetIconButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
 }
 
 .preview {
@@ -239,33 +260,6 @@
 .outputList button:disabled {
   cursor: not-allowed;
   opacity: 0.48;
-}
-
-.sourceBox {
-  display: grid;
-  gap: 10px;
-  margin-top: 14px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px;
-  background: color-mix(in srgb, var(--field) 72%, var(--surface));
-}
-
-.sourceBox > div {
-  gap: 7px;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.sourceBox pre {
-  max-height: 210px;
-  overflow: auto;
-  color: var(--text-soft);
-  font-size: 11px;
-  line-height: 1.45;
-  white-space: pre-wrap;
 }
 
 @media (max-width: 1180px) {
