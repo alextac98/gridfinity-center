@@ -108,6 +108,10 @@ function deleteIfPresent(fs: OpenScadFileSystem, path: string) {
   }
 }
 
+export function getOpenScadLogs() {
+  return [...openScadLogs];
+}
+
 export async function renderOpenScadToStl({
   entryFile,
   defines,

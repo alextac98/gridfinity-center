@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Box,
   Code2,
   Download,
   Layers3,
@@ -9,15 +8,16 @@ import {
   RotateCcw,
   SlidersHorizontal,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GRIDFINITY_GRID_MM, GRIDFINITY_HEIGHT_UNIT_MM } from "@/lib/gridfinity/constants";
-import { renderOpenScadToStl } from "@/lib/openscad/client";
 import {
   createBinDefines,
   createBinScadSnippet,
   defaultGridfinityBinParameters,
   type GridfinityBinParameters,
 } from "@/lib/openscad/gridfinityExtended";
+import { createOpenScadWorker } from "@/lib/openscad/workerClient";
+import type { OpenScadWorkerRequest, OpenScadWorkerResponse } from "@/lib/openscad/workerTypes";
 import type { GridfinityAppProps } from "../types";
 import { OpenScadPreview } from "../openscad/OpenScadPreview";
 import styles from "./bin-generator.module.css";
@@ -63,6 +63,35 @@ function toArrayBuffer(bytes: Uint8Array) {
   return copy.buffer;
 }
 
+function createParamsKey(params: GridfinityBinParameters) {
+  return JSON.stringify({
+    widthUnits: params.widthUnits,
+    depthUnits: params.depthUnits,
+    heightUnits: params.heightUnits,
+    verticalChambers: params.verticalChambers,
+    horizontalChambers: params.horizontalChambers,
+    lipStyle: params.lipStyle,
+    labelStyle: params.labelStyle,
+    labelPosition: params.labelPosition,
+    fingerslide: params.fingerslide,
+    magnets: params.magnets,
+    screws: params.screws,
+    flatBase: params.flatBase,
+    filledIn: params.filledIn,
+    wallThicknessMm: params.wallThicknessMm,
+  });
+}
+
+function writeOpenScadErrorToConsole(message: string, logs: string[]) {
+  console.error("OpenSCAD render failed.", message);
+
+  if (logs.length > 0) {
+    console.groupCollapsed("OpenSCAD logs");
+    console.info(logs.join("\n"));
+    console.groupEnd();
+  }
+}
+
 export function BinGeneratorApp({ accent }: GridfinityAppProps) {
   const [hasMounted, setHasMounted] = useState(false);
   const [params, setParams] = useState(defaultGridfinityBinParameters);
@@ -75,10 +104,18 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
     ) as Record<NumberField, string>,
   );
   const [stl, setStl] = useState<Uint8Array>();
-  const [renderStatus, setRenderStatus] = useState("Procedural preview ready");
+  const [renderStatus, setRenderStatus] = useState("Preparing OpenSCAD worker");
   const [renderError, setRenderError] = useState("");
   const [isRendering, setIsRendering] = useState(false);
   const renderSequenceRef = useRef(0);
+  const workerRef = useRef<Worker | null>(null);
+  const latestParamsRef = useRef(defaultGridfinityBinParameters);
+  const latestParamsKeyRef = useRef(createParamsKey(defaultGridfinityBinParameters));
+  const activeRequestRef = useRef<number | null>(null);
+  const activeParamsKeyRef = useRef("");
+  const isWorkerRenderingRef = useRef(false);
+  const queuedRenderRef = useRef(false);
+  const renderTimerRef = useRef<number | null>(null);
 
   const scadSnippet = useMemo(() => createBinScadSnippet(params), [params]);
   const dimensions = useMemo(
@@ -96,58 +133,162 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
     return () => window.clearTimeout(mountTimer);
   }, []);
 
+  const startRender = useCallback((nextParams: GridfinityBinParameters) => {
+    const worker = workerRef.current;
+
+    if (!worker) {
+      return;
+    }
+
+    const renderSequence = renderSequenceRef.current + 1;
+    renderSequenceRef.current = renderSequence;
+    activeRequestRef.current = renderSequence;
+    activeParamsKeyRef.current = createParamsKey(nextParams);
+    isWorkerRenderingRef.current = true;
+    queuedRenderRef.current = false;
+    setIsRendering(true);
+    setRenderError("");
+    setRenderStatus("Rendering OpenSCAD STL");
+
+    const request: OpenScadWorkerRequest = {
+      type: "render",
+      requestId: renderSequence,
+      entryFile: "gridfinity_basic_cup.scad",
+      defines: createBinDefines(nextParams),
+      outputName: "gridfinity-bin.stl",
+    };
+
+    worker.postMessage(request);
+  }, []);
+
+  const requestRender = useCallback(
+    (nextParams: GridfinityBinParameters, delayMs = 250) => {
+      latestParamsRef.current = nextParams;
+      latestParamsKeyRef.current = createParamsKey(nextParams);
+      setStl(undefined);
+      setRenderError("");
+
+      if (renderTimerRef.current !== null) {
+        window.clearTimeout(renderTimerRef.current);
+        renderTimerRef.current = null;
+      }
+
+      if (!workerRef.current) {
+        setIsRendering(true);
+        setRenderStatus("Preparing OpenSCAD worker");
+        return;
+      }
+
+      if (isWorkerRenderingRef.current) {
+        queuedRenderRef.current = true;
+        setIsRendering(true);
+        setRenderStatus("Rendering updated OpenSCAD STL");
+        return;
+      }
+
+      setIsRendering(true);
+      setRenderStatus("OpenSCAD render queued");
+      renderTimerRef.current = window.setTimeout(() => {
+        renderTimerRef.current = null;
+        startRender(latestParamsRef.current);
+      }, delayMs);
+    },
+    [startRender],
+  );
+
   useEffect(() => {
     if (!hasMounted) {
       return;
     }
 
-    let cancelled = false;
-    const renderSequence = renderSequenceRef.current + 1;
-    renderSequenceRef.current = renderSequence;
-    const renderTimer = window.setTimeout(() => {
-      setIsRendering(true);
-      setRenderStatus("Rendering OpenSCAD STL");
-      setRenderError("");
+    const worker = createOpenScadWorker();
+    workerRef.current = worker;
 
-      renderOpenScadToStl({
-        entryFile: "gridfinity_basic_cup.scad",
-        defines: createBinDefines(params),
-        outputName: "gridfinity-bin.stl",
-      })
-        .then((bytes) => {
-          if (cancelled || renderSequence !== renderSequenceRef.current) {
-            return;
-          }
+    const startQueuedRenderIfNeeded = () => {
+      isWorkerRenderingRef.current = false;
+      activeRequestRef.current = null;
 
-          setStl(bytes);
-          setRenderStatus("OpenSCAD preview ready");
-          setRenderError("");
-        })
-        .catch((error: unknown) => {
-          if (cancelled || renderSequence !== renderSequenceRef.current) {
-            return;
-          }
+      if (queuedRenderRef.current || latestParamsKeyRef.current !== activeParamsKeyRef.current) {
+        queuedRenderRef.current = false;
+        startRender(latestParamsRef.current);
+        return true;
+      }
 
-          setStl(undefined);
-          setRenderError(error instanceof Error ? error.message : "Unknown OpenSCAD error");
-          setRenderStatus(
-            error instanceof Error
-              ? `OpenSCAD render failed: ${error.message.split("\n")[0]}`
-              : "OpenSCAD render failed",
-          );
-        })
-        .finally(() => {
-          if (!cancelled && renderSequence === renderSequenceRef.current) {
-            setIsRendering(false);
-          }
-        });
-    }, 0);
+      return false;
+    };
+
+    const handleMessage = (event: MessageEvent<OpenScadWorkerResponse>) => {
+      const message = event.data;
+
+      if (message.type === "render-started") {
+        return;
+      }
+
+      if (message.requestId !== activeRequestRef.current) {
+        return;
+      }
+
+      if (message.type === "render-done") {
+        if (startQueuedRenderIfNeeded()) {
+          return;
+        }
+
+        setStl(new Uint8Array(message.stl));
+        setRenderStatus("OpenSCAD preview ready");
+        setRenderError("");
+        setIsRendering(false);
+        return;
+      }
+
+      writeOpenScadErrorToConsole(message.message, message.logs);
+
+      if (startQueuedRenderIfNeeded()) {
+        return;
+      }
+
+      setStl(undefined);
+      setRenderError("OpenSCAD could not generate this bin. Check the browser console for details.");
+      setRenderStatus("OpenSCAD render failed");
+      setIsRendering(false);
+    };
+
+    const handleWorkerError = (event: ErrorEvent) => {
+      console.error("OpenSCAD worker failed.", event.error ?? event.message);
+      isWorkerRenderingRef.current = false;
+      activeRequestRef.current = null;
+      setStl(undefined);
+      setRenderError("The OpenSCAD worker failed to start. Check the browser console for details.");
+      setRenderStatus("OpenSCAD worker failed");
+      setIsRendering(false);
+    };
+
+    worker.addEventListener("message", handleMessage);
+    worker.addEventListener("error", handleWorkerError);
 
     return () => {
-      cancelled = true;
-      window.clearTimeout(renderTimer);
+      if (renderTimerRef.current !== null) {
+        window.clearTimeout(renderTimerRef.current);
+        renderTimerRef.current = null;
+      }
+
+      worker.removeEventListener("message", handleMessage);
+      worker.removeEventListener("error", handleWorkerError);
+      worker.terminate();
+      workerRef.current = null;
+      isWorkerRenderingRef.current = false;
+      activeRequestRef.current = null;
     };
-  }, [hasMounted, params]);
+  }, [hasMounted, startRender]);
+
+  useEffect(() => {
+    if (!hasMounted) {
+      return;
+    }
+
+    const renderTimer = window.setTimeout(() => requestRender(params), 0);
+
+    return () => window.clearTimeout(renderTimer);
+  }, [hasMounted, params, requestRender]);
 
   const commitNumberField = (field: NumberField) => {
     const config = numberFields[field];
@@ -362,7 +503,11 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
             {renderError ? "Render failed" : isRendering ? "Rendering" : renderStatus}
           </div>
         </div>
-        <OpenScadPreview params={params} stl={stl} />
+        <OpenScadPreview
+          stl={stl}
+          errorMessage={renderError}
+          loadingMessage={renderStatus}
+        />
       </section>
 
       <section className={styles.panel} aria-label="Model output">
@@ -385,20 +530,6 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
               {dimensions.height.toFixed(1)} mm
             </strong>
           </div>
-          <div>
-            <span>Renderer</span>
-            <strong>
-              {renderError
-                ? "OpenSCAD failed; showing draft placeholder"
-                : "Gridfinity Extended OpenSCAD via openscad-wasm"}
-            </strong>
-          </div>
-          {renderError ? (
-            <div className={styles.errorBox}>
-              <span>OpenSCAD error</span>
-              <pre>{renderError}</pre>
-            </div>
-          ) : null}
           <button
             type="button"
             disabled={!stl}
@@ -425,14 +556,6 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
             <Code2 aria-hidden="true" size={16} />
             SCAD
           </button>
-        </div>
-
-        <div className={styles.sourceBox}>
-          <div>
-            <Box aria-hidden="true" size={15} />
-            <span>OpenSCAD source</span>
-          </div>
-          <pre>{scadSnippet}</pre>
         </div>
       </section>
     </div>

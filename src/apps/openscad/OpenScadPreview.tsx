@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
-import { Home } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Home, LoaderCircle, TriangleAlert } from "lucide-react";
 import {
   AmbientLight,
   Box3,
@@ -9,9 +9,7 @@ import {
   BufferGeometry,
   CanvasTexture,
   Color,
-  CylinderGeometry,
   DirectionalLight,
-  Group,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
@@ -25,13 +23,12 @@ import {
 } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
-import { GRIDFINITY_GRID_MM, GRIDFINITY_HEIGHT_UNIT_MM } from "@/lib/gridfinity/constants";
-import type { GridfinityBinParameters } from "@/lib/openscad/gridfinityExtended";
 import styles from "./openscad-preview.module.css";
 
 type OpenScadPreviewProps = {
-  params: GridfinityBinParameters;
   stl?: Uint8Array;
+  errorMessage?: string;
+  loadingMessage?: string;
 };
 
 type OrientationView =
@@ -149,93 +146,6 @@ function getCubeFaceView(normal: Vector3): OrientationView {
   return normal.z > 0 ? "top" : "bottom";
 }
 
-function createProceduralBin(params: GridfinityBinParameters, theme: PreviewTheme) {
-  const group = new Group();
-  const width = params.widthUnits * GRIDFINITY_GRID_MM;
-  const depth = params.depthUnits * GRIDFINITY_GRID_MM;
-  const height = params.heightUnits * GRIDFINITY_HEIGHT_UNIT_MM;
-  const wall = params.wallThicknessMm || (params.heightUnits > 8 ? 1.2 : 0.95);
-  const floor = params.filledIn ? height : 2.8;
-  const material = new MeshStandardMaterial({
-    color: new Color(theme.model),
-    roughness: 0.58,
-    metalness: 0.04,
-  });
-  material.userData.viewerRole = "model";
-  const detailMaterial = new MeshStandardMaterial({
-    color: new Color(theme.modelDetail),
-    roughness: 0.64,
-    metalness: 0.02,
-  });
-  detailMaterial.userData.viewerRole = "detail";
-
-  const addBox = (size: [number, number, number], position: [number, number, number], boxMaterial = material) => {
-    const mesh = new Mesh(new BoxGeometry(...size), boxMaterial);
-    mesh.position.set(...position);
-    group.add(mesh);
-  };
-
-  addBox([width - 6, depth - 6, floor], [0, 0, floor / 2]);
-
-  if (!params.filledIn) {
-    addBox([width, wall, height], [0, -depth / 2 + wall / 2, height / 2]);
-    addBox([width, wall, height], [0, depth / 2 - wall / 2, height / 2]);
-    addBox([wall, depth, height], [-width / 2 + wall / 2, 0, height / 2]);
-    addBox([wall, depth, height], [width / 2 - wall / 2, 0, height / 2]);
-
-    for (let index = 1; index < params.verticalChambers; index += 1) {
-      const x = -width / 2 + (width / params.verticalChambers) * index;
-      addBox([1.2, depth - wall * 2, height - 2], [x, 0, height / 2], detailMaterial);
-    }
-
-    for (let index = 1; index < params.horizontalChambers; index += 1) {
-      const y = -depth / 2 + (depth / params.horizontalChambers) * index;
-      addBox([width - wall * 2, 1.2, height - 2], [0, y, height / 2], detailMaterial);
-    }
-  }
-
-  if (params.lipStyle !== "none") {
-    const lipHeight = params.lipStyle === "minimum" ? 1.4 : 3.8;
-    const lipOutset = params.lipStyle === "minimum" ? 0.8 : 1.6;
-    const lipWidth = params.lipStyle === "reduced" ? 2.2 : 3.6;
-    const topZ = height + lipHeight / 2;
-
-    addBox([width + lipOutset * 2, lipWidth, lipHeight], [0, -depth / 2 - lipOutset + lipWidth / 2, topZ], detailMaterial);
-    addBox([width + lipOutset * 2, lipWidth, lipHeight], [0, depth / 2 + lipOutset - lipWidth / 2, topZ], detailMaterial);
-    addBox([lipWidth, depth + lipOutset * 2, lipHeight], [-width / 2 - lipOutset + lipWidth / 2, 0, topZ], detailMaterial);
-    addBox([lipWidth, depth + lipOutset * 2, lipHeight], [width / 2 + lipOutset - lipWidth / 2, 0, topZ], detailMaterial);
-  }
-
-  for (let xIndex = 0; xIndex < params.widthUnits; xIndex += 1) {
-    for (let yIndex = 0; yIndex < params.depthUnits; yIndex += 1) {
-      const x = -width / 2 + GRIDFINITY_GRID_MM / 2 + xIndex * GRIDFINITY_GRID_MM;
-      const y = -depth / 2 + GRIDFINITY_GRID_MM / 2 + yIndex * GRIDFINITY_GRID_MM;
-
-      addBox([31.5, 31.5, 2], [x, y, -1.1], detailMaterial);
-      addBox([36.5, 36.5, 1.1], [x, y, -2.65]);
-    }
-  }
-
-  if (params.magnets || params.screws) {
-    const holeMaterial = new MeshStandardMaterial({ color: theme.modelDark, roughness: 0.7 });
-    holeMaterial.userData.viewerRole = "dark";
-    const radius = params.magnets ? 3.25 : 1.5;
-    const offsets = [
-      [-width / 2 + 10.5, -depth / 2 + 10.5],
-      [width / 2 - 10.5, -depth / 2 + 10.5],
-      [-width / 2 + 10.5, depth / 2 - 10.5],
-      [width / 2 - 10.5, depth / 2 - 10.5],
-    ];
-
-    for (const [x, y] of offsets) {
-      const cylinder = new Mesh(new CylinderGeometry(radius, radius, 0.8, 32), holeMaterial);
-      cylinder.position.set(x, y, floor + 0.45);
-      group.add(cylinder);
-    }
-  }
-  return group;
-}
-
 function createStlMesh(bytes: Uint8Array, theme: PreviewTheme) {
   const loader = new STLLoader();
   const copy = new Uint8Array(bytes.byteLength);
@@ -259,17 +169,21 @@ function createStlMesh(bytes: Uint8Array, theme: PreviewTheme) {
   return mesh;
 }
 
-export function OpenScadPreview({ params, stl }: OpenScadPreviewProps) {
+export function OpenScadPreview({ stl, errorMessage, loadingMessage }: OpenScadPreviewProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const orientationHostRef = useRef<HTMLDivElement>(null);
   const cameraRef = useRef<PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const sceneRef = useRef<Scene | null>(null);
-  const modelRef = useRef<Group | Mesh<BufferGeometry> | null>(null);
+  const modelRef = useRef<Mesh<BufferGeometry> | null>(null);
   const modelCenterRef = useRef(new Vector3(0, 0, 16));
   const modelRadiusRef = useRef(96);
   const hasSetInitialViewRef = useRef(false);
   const themeRef = useRef<PreviewTheme | null>(null);
+  const [viewerError, setViewerError] = useState<{
+    stl: Uint8Array;
+    message: string;
+  } | null>(null);
 
   const snapToView = useCallback((view: OrientationView) => {
     const camera = cameraRef.current;
@@ -477,6 +391,11 @@ export function OpenScadPreview({ params, stl }: OpenScadPreviewProps) {
       scene.remove(modelRef.current);
     }
 
+    if (!stl) {
+      modelRef.current = null;
+      return;
+    }
+
     const host = hostRef.current;
     const theme = themeRef.current ?? (host ? getPreviewTheme(host) : null);
 
@@ -484,7 +403,22 @@ export function OpenScadPreview({ params, stl }: OpenScadPreviewProps) {
       return;
     }
 
-    const model = stl ? createStlMesh(stl, theme) : createProceduralBin(params, theme);
+    let model: Mesh<BufferGeometry>;
+
+    try {
+      model = createStlMesh(stl, theme);
+    } catch (error) {
+      console.error("STL preview failed to load.", error);
+      const failedStl = stl;
+      queueMicrotask(() =>
+        setViewerError({
+          stl: failedStl,
+          message: "The STL was generated, but the 3D preview could not load it.",
+        }),
+      );
+      return;
+    }
+
     const bounds = new Box3().setFromObject(model);
     const size = new Vector3();
     bounds.getCenter(modelCenterRef.current);
@@ -503,12 +437,37 @@ export function OpenScadPreview({ params, stl }: OpenScadPreviewProps) {
     return () => {
       scene.remove(model);
     };
-  }, [params, snapToView, stl]);
+  }, [snapToView, stl]);
+
+  const viewerErrorMessage = viewerError && viewerError.stl === stl ? viewerError.message : "";
+  const visibleError = errorMessage || viewerErrorMessage;
 
   return (
     <div className={styles.previewHost}>
       <div ref={hostRef} className={styles.canvasHost} />
-      <div className={styles.orientationWidget} aria-label="View orientation controls">
+      {visibleError || !stl ? (
+        <div className={styles.previewOverlay} role={visibleError ? "alert" : "status"}>
+          <div className={styles.previewDialog}>
+            <div className={visibleError ? styles.errorIcon : styles.loadingIcon} aria-hidden="true">
+              {visibleError ? <TriangleAlert size={22} /> : <LoaderCircle size={22} />}
+            </div>
+            <strong>
+              {visibleError ? "OpenSCAD could not generate a preview" : "Generating OpenSCAD preview"}
+            </strong>
+            <span>
+              {visibleError
+                ? "Adjust the model settings or reset the bin. Technical details were written to the browser console."
+                : loadingMessage ?? "The exact STL model will appear when rendering finishes."}
+            </span>
+          </div>
+        </div>
+      ) : null}
+      <div
+        className={`${styles.orientationWidget} ${
+          visibleError || !stl ? styles.orientationWidgetHidden : ""
+        }`}
+        aria-label="View orientation controls"
+      >
         <button
           aria-label="Home view"
           className={styles.homeIconButton}

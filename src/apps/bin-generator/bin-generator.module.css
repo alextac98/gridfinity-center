@@ -219,11 +219,6 @@
   background: var(--field);
 }
 
-.outputList .errorBox {
-  border-color: color-mix(in srgb, #f08f73 55%, var(--border));
-  background: color-mix(in srgb, #f08f73 12%, var(--surface));
-}
-
 .outputList span {
   color: var(--muted);
   font-size: 12px;
@@ -235,15 +230,6 @@
   color: var(--output-strong);
   font-size: 14px;
   line-height: 1.35;
-}
-
-.errorBox pre {
-  max-height: 260px;
-  overflow: auto;
-  color: var(--text);
-  font-size: 11px;
-  line-height: 1.45;
-  white-space: pre-wrap;
 }
 
 .outputList button {
