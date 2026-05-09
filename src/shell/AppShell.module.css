@@ -119,7 +119,8 @@
 .appTab,
 .activeTab,
 .sidebarIconButton,
-.themeToggle,
+.utilityButton,
+.aboutHeader,
 .topbar {
   display: flex;
   align-items: center;
@@ -144,7 +145,8 @@
 }
 
 .sidebarIconButton,
-.themeToggle {
+.utilityButton,
+.aboutCloseButton {
   border: 1px solid var(--border-strong);
   border-radius: 8px;
   background: var(--surface);
@@ -160,7 +162,8 @@
 }
 
 .sidebarIconButton:hover,
-.themeToggle:hover,
+.utilityButton:hover,
+.aboutCloseButton:hover,
 .appTab:hover {
   border-color: color-mix(in srgb, var(--brand-accent) 42%, transparent);
   background: var(--hover);
@@ -234,8 +237,7 @@
 
 .collapsedSidebar .appTab span,
 .collapsedSidebar .activeTab span,
-.collapsedSidebar .soonBadge,
-.collapsedSidebar .themeToggle span {
+.collapsedSidebar .soonBadge {
   display: none;
 }
 
@@ -256,28 +258,32 @@
 }
 
 .sidebarBottom {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
   margin-top: auto;
 }
 
-.themeToggle {
-  justify-content: flex-start;
+.utilityButton {
+  display: grid;
+  place-items: center;
   width: 100%;
-  min-height: 46px;
-  gap: 10px;
-  padding: 0 12px;
-  font: inherit;
-  font-weight: 680;
+  height: 42px;
+  color: var(--text-soft);
 }
 
 .collapsedSidebar .sidebarBottom {
+  grid-template-columns: 1fr;
   width: 48px;
 }
 
-.collapsedSidebar .themeToggle {
-  justify-content: center;
+.collapsedSidebar .utilityButton {
   width: 48px;
-  min-height: 48px;
-  padding: 0;
+  height: 48px;
+}
+
+.collapsedSidebar .secondaryUtilityButton {
+  display: none;
 }
 
 .workspace {
@@ -320,6 +326,78 @@
   font-weight: 620;
   line-height: 1.4;
   text-align: right;
+}
+
+.aboutOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.48);
+  backdrop-filter: blur(1px);
+}
+
+.aboutDialog {
+  width: min(460px, calc(100vw - 48px));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 18px 20px 20px;
+  background: var(--surface);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+}
+
+.aboutHeader {
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.aboutHeader h2 {
+  font-size: 22px;
+  line-height: 1.1;
+  font-weight: 780;
+}
+
+.aboutCloseButton {
+  display: grid;
+  place-items: center;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+}
+
+.aboutDialog p {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 620;
+  line-height: 1.5;
+}
+
+.aboutDialog p + p {
+  margin-top: 10px;
+}
+
+.aboutSourceLink {
+  display: inline-flex;
+  margin-top: 16px;
+  color: var(--brand-accent);
+  font-size: 14px;
+  font-weight: 760;
+}
+
+.aboutCredit {
+  margin-top: 18px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 620;
+  text-align: center;
+}
+
+.aboutCredit a {
+  color: inherit;
+  font-weight: 760;
 }
 
 @media (max-width: 1120px) {
@@ -375,8 +453,13 @@
     margin-top: 14px;
   }
 
-  .collapsedSidebar .themeToggle {
+  .collapsedSidebar .sidebarBottom {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .collapsedSidebar .utilityButton {
     width: 100%;
+    height: 42px;
   }
 }
 
