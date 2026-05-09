@@ -120,8 +120,7 @@
 .activeTab,
 .sidebarIconButton,
 .themeToggle,
-.topbar,
-.topbarActions {
+.topbar {
   display: flex;
   align-items: center;
 }
@@ -145,8 +144,7 @@
 }
 
 .sidebarIconButton,
-.themeToggle,
-.topbarActions button {
+.themeToggle {
   border: 1px solid var(--border-strong);
   border-radius: 8px;
   background: var(--surface);
@@ -163,7 +161,6 @@
 
 .sidebarIconButton:hover,
 .themeToggle:hover,
-.topbarActions button:hover,
 .appTab:hover {
   border-color: color-mix(in srgb, var(--brand-accent) 42%, transparent);
   background: var(--hover);
@@ -290,52 +287,39 @@
   min-height: 0;
   height: 100dvh;
   overflow: hidden;
-  padding: 28px;
+  padding: 14px;
 }
 
 .topbar {
   justify-content: space-between;
   gap: 24px;
-  min-height: 116px;
+  min-height: 76px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 24px;
+  padding: 16px 20px;
   background: var(--surface);
   box-shadow: var(--topbar-shadow);
 }
 
-.eyebrow {
-  color: var(--eyebrow);
-  font-size: 12px;
-  font-weight: 760;
-  text-transform: uppercase;
+.topbarTitle {
+  min-width: 0;
+  flex: 0 1 auto;
 }
 
 .topbar h1 {
-  margin-top: 6px;
-  font-size: clamp(34px, 4vw, 54px);
+  font-size: clamp(30px, 3vw, 42px);
   line-height: 1;
   font-weight: 780;
 }
 
-.topbar p:last-child {
-  max-width: 720px;
-  margin-top: 10px;
+.topbarDescription {
+  max-width: 620px;
+  margin-left: auto;
   color: var(--muted);
-  font-size: 16px;
-  line-height: 1.45;
-}
-
-.topbarActions {
-  gap: 8px;
-}
-
-.topbarActions button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
+  font-size: 14px;
+  font-weight: 620;
+  line-height: 1.4;
+  text-align: right;
 }
 
 @media (max-width: 1120px) {
@@ -427,7 +411,14 @@
   .topbar {
     align-items: flex-start;
     flex-direction: column;
+    gap: 10px;
     min-height: auto;
-    padding: 18px;
+    padding: 16px;
+  }
+
+  .topbarDescription {
+    max-width: none;
+    margin-left: 0;
+    text-align: left;
   }
 }

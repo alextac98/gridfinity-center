@@ -1,6 +1,5 @@
-import { Box, Cuboid, Grid3X3, Tag } from "lucide-react";
+import { Box, Grid3X3, Tag } from "lucide-react";
 import { BinGeneratorApp } from "@/apps/bin-generator/BinGeneratorApp";
-import { GridGeneratorApp } from "@/apps/grid-generator/GridGeneratorApp";
 import { LabelGeneratorApp } from "@/apps/label-generator/LabelGeneratorApp";
 import type { GridfinityAppConfig } from "@/apps/types";
 
@@ -32,16 +31,6 @@ export const apps = [
     description:
       "Lay out baseplates, wall grids, weighted plates, and printable workbench grids.",
     icon: Grid3X3,
-    Component: GridGeneratorApp,
-    accent: "blue",
-  },
-  {
-    id: "model-viewer",
-    name: "Model Viewer",
-    eyebrow: "Preview",
-    description:
-      "Inspect STL and 3MF files, review print orientation, and compare generated model variants.",
-    icon: Cuboid,
     comingSoon: true,
     accent: "blue",
   },

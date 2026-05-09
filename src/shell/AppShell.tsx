@@ -2,11 +2,9 @@
 
 import {
   Boxes,
-  Download,
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
-  Save,
   Sun,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -153,19 +151,10 @@ export function AppShell({ activeAppId }: AppShellProps) {
           role="tabpanel"
         >
           <header className={styles.topbar}>
-            <div>
-              <p className={styles.eyebrow}>{activeApp.eyebrow}</p>
+            <div className={styles.topbarTitle}>
               <h1>{activeApp.name}</h1>
-              <p>{activeApp.description}</p>
             </div>
-            <div className={styles.topbarActions}>
-              <button type="button" aria-label="Save preset">
-                <Save aria-hidden="true" size={18} />
-              </button>
-              <button type="button" aria-label="Export files">
-                <Download aria-hidden="true" size={18} />
-              </button>
-            </div>
+            <p className={styles.topbarDescription}>{activeApp.description}</p>
           </header>
 
           {"Component" in activeApp ? (
