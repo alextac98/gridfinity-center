@@ -18,7 +18,9 @@
 }
 
 .panel {
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 16px;
 }
 
@@ -28,7 +30,7 @@
 .actionRow,
 .generateButton,
 .resetIconButton,
-.outputList button {
+.outputActions button {
   display: flex;
   align-items: center;
 }
@@ -45,10 +47,25 @@
   font-weight: 760;
 }
 
+.panelScroll {
+  flex: 1;
+  min-height: 0;
+  margin-top: 22px;
+  overflow: auto;
+}
+
+.panelActions {
+  flex: 0 0 auto;
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  background: var(--surface);
+}
+
 .formShell {
   display: grid;
   gap: 13px;
-  margin-top: 22px;
+  padding-bottom: 4px;
 }
 
 .loadingPanel,
@@ -153,7 +170,7 @@
 
 .generateButton,
 .resetIconButton,
-.outputList button {
+.outputActions button {
   justify-content: center;
   gap: 8px;
   min-height: 38px;
@@ -170,7 +187,6 @@
 
 .actionRow {
   gap: 8px;
-  margin-top: 3px;
 }
 
 .generateButton {
@@ -228,7 +244,7 @@
 .outputList {
   display: grid;
   gap: 12px;
-  margin-top: 22px;
+  padding-bottom: 4px;
 }
 
 .outputList div {
@@ -253,11 +269,16 @@
   line-height: 1.35;
 }
 
-.outputList button {
+.outputActions {
+  display: grid;
+  gap: 10px;
+}
+
+.outputActions button {
   width: 100%;
 }
 
-.outputList button:disabled {
+.outputActions button:disabled {
   cursor: not-allowed;
   opacity: 0.48;
 }

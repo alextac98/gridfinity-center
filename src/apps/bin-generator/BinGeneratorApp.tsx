@@ -5,6 +5,7 @@ import {
   Download,
   Layers3,
   PanelLeft,
+  Play,
   RotateCcw,
   SlidersHorizontal,
 } from "lucide-react";
@@ -32,6 +33,22 @@ type NumberField = keyof Pick<
   | "wallThicknessMm"
 >;
 
+type R2CacheResponse =
+  | {
+      enabled: false;
+      reason: string;
+      settingsHash: string;
+      objectKey: string;
+    }
+  | {
+      enabled: true;
+      hit: boolean;
+      settingsHash: string;
+      objectKey: string;
+      downloadUrl: string;
+      uploadUrl?: string;
+    };
+
 const numberFields: Record<
   NumberField,
   { label: string; min: number; max: number; step: number; suffix: string }
@@ -46,6 +63,7 @@ const numberFields: Record<
 
 const defaultModelPath = "/default-models/default-gridfinity-bin.stl";
 const defaultParamsKey = createParamsKey(defaultGridfinityBinParameters);
+const GRIDFINITY_LIP_HEIGHT_MM = 3.8;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -58,6 +76,14 @@ function downloadBlob(name: string, blob: Blob) {
   link.download = name;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+function downloadUrl(name: string, url: string) {
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  link.rel = "noopener";
+  link.click();
 }
 
 function toArrayBuffer(bytes: Uint8Array) {
@@ -95,6 +121,79 @@ function writeOpenScadErrorToConsole(message: string, logs: string[]) {
   }
 }
 
+async function cacheGeneratedStl(cache: R2CacheResponse, stlBytes: Uint8Array) {
+  if (!cache.enabled || cache.hit || !cache.uploadUrl) {
+    return;
+  }
+
+  try {
+    try {
+      await uploadStlToR2(cache.uploadUrl, stlBytes);
+    } catch (directUploadError) {
+      console.warn("Direct R2 upload failed; retrying through API.", directUploadError);
+      await uploadStlThroughApi(cache.objectKey, stlBytes);
+    }
+  } catch (error) {
+    console.warn("R2 cache upload failed; keeping local STL.", error);
+    throw error;
+  }
+}
+
+async function lookupR2Cache(params: GridfinityBinParameters) {
+  const response = await fetch("/api/bin-generator/r2-cache", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ params }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`R2 cache lookup failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as R2CacheResponse;
+}
+
+async function fetchStlFromUrl(url: string) {
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Could not load cached STL: ${response.status}`);
+  }
+
+  return new Uint8Array(await response.arrayBuffer());
+}
+
+async function uploadStlToR2(uploadUrl: string, stlBytes: Uint8Array) {
+  const response = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "model/stl",
+    },
+    body: toArrayBuffer(stlBytes),
+  });
+
+  if (!response.ok) {
+    throw new Error(`R2 cache upload failed with status ${response.status}`);
+  }
+}
+
+async function uploadStlThroughApi(objectKey: string, stlBytes: Uint8Array) {
+  const response = await fetch("/api/bin-generator/r2-cache/upload", {
+    method: "POST",
+    headers: {
+      "Content-Type": "model/stl",
+      "x-r2-object-key": objectKey,
+    },
+    body: toArrayBuffer(stlBytes),
+  });
+
+  if (!response.ok) {
+    throw new Error(`R2 cache API upload failed with status ${response.status}`);
+  }
+}
+
 export function BinGeneratorApp({ accent }: GridfinityAppProps) {
   const [hasMounted, setHasMounted] = useState(false);
   const [params, setParams] = useState(defaultGridfinityBinParameters);
@@ -120,6 +219,9 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
   const activeParamsKeyRef = useRef("");
   const isWorkerRenderingRef = useRef(false);
   const queuedRenderRef = useRef(false);
+  const activeCacheRef = useRef<R2CacheResponse | null>(null);
+  const [cachedDownloadUrl, setCachedDownloadUrl] = useState("");
+  const [cachedDownloadParamsKey, setCachedDownloadParamsKey] = useState("");
 
   const scadSnippet = useMemo(() => createBinScadSnippet(params), [params]);
   const currentParamsKey = useMemo(() => createParamsKey(params), [params]);
@@ -144,9 +246,11 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
     () => ({
       width: params.widthUnits * GRIDFINITY_GRID_MM,
       depth: params.depthUnits * GRIDFINITY_GRID_MM,
-      height: params.heightUnits * GRIDFINITY_HEIGHT_UNIT_MM,
+      height:
+        params.heightUnits * GRIDFINITY_HEIGHT_UNIT_MM +
+        (params.lipStyle === "none" ? 0 : GRIDFINITY_LIP_HEIGHT_MM),
     }),
-    [params],
+    [params.depthUnits, params.heightUnits, params.lipStyle, params.widthUnits],
   );
 
   useEffect(() => {
@@ -225,9 +329,11 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
   }, []);
 
   const requestRender = useCallback(
-    (nextParams: GridfinityBinParameters) => {
+    async (nextParams: GridfinityBinParameters) => {
+      const nextParamsKey = createParamsKey(nextParams);
       latestParamsRef.current = nextParams;
-      latestParamsKeyRef.current = createParamsKey(nextParams);
+      latestParamsKeyRef.current = nextParamsKey;
+      activeCacheRef.current = null;
       setRenderError("");
 
       if (!workerRef.current) {
@@ -244,6 +350,30 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
       }
 
       setIsRendering(true);
+      setRenderStatus("Checking model cache");
+
+      try {
+        const cache = await lookupR2Cache(nextParams);
+
+        if (cache.enabled && cache.hit) {
+          setRenderStatus("Loading cached STL");
+          const cachedStl = await fetchStlFromUrl(cache.downloadUrl);
+          setStl(cachedStl);
+          setGeneratedParamsKey(nextParamsKey);
+          setCachedDownloadUrl(cache.downloadUrl);
+          setCachedDownloadParamsKey(nextParamsKey);
+          setRenderStatus("Cached OpenSCAD preview ready");
+          setIsRendering(false);
+          return;
+        }
+
+        if (cache.enabled) {
+          activeCacheRef.current = cache;
+        }
+      } catch (error) {
+        console.warn("R2 cache lookup failed; rendering locally.", error);
+      }
+
       setRenderStatus("Rendering OpenSCAD STL");
       startRender(latestParamsRef.current);
     },
@@ -271,7 +401,7 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
       return false;
     };
 
-    const handleMessage = (event: MessageEvent<OpenScadWorkerResponse>) => {
+    const handleWorkerMessage = async (event: MessageEvent<OpenScadWorkerResponse>) => {
       const message = event.data;
 
       if (message.type === "render-started") {
@@ -287,15 +417,38 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
           return;
         }
 
-        setStl(new Uint8Array(message.stl));
-        setGeneratedParamsKey(activeParamsKeyRef.current);
+        const stlBytes = new Uint8Array(message.stl);
+        const cache = activeCacheRef.current;
+        const renderedParamsKey = activeParamsKeyRef.current;
+        activeCacheRef.current = null;
+        setStl(stlBytes);
+        setGeneratedParamsKey(renderedParamsKey);
         setRenderStatus("OpenSCAD preview ready");
         setRenderError("");
         setIsRendering(false);
+
+        if (cache?.enabled && !cache.hit && cache.uploadUrl) {
+          setCachedDownloadUrl("");
+          setCachedDownloadParamsKey("");
+          void cacheGeneratedStl(cache, stlBytes)
+            .then(() => {
+              setCachedDownloadUrl(cache.downloadUrl);
+              setCachedDownloadParamsKey(renderedParamsKey);
+            })
+            .catch(() => {
+              setCachedDownloadUrl("");
+              setCachedDownloadParamsKey("");
+            });
+        } else {
+          setCachedDownloadUrl("");
+          setCachedDownloadParamsKey("");
+        }
+
         return;
       }
 
       writeOpenScadErrorToConsole(message.message, message.logs);
+      activeCacheRef.current = null;
 
       if (startQueuedRenderIfNeeded()) {
         return;
@@ -304,6 +457,10 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
       setRenderError("OpenSCAD could not generate this bin. Check the browser console for details.");
       setRenderStatus("OpenSCAD render failed");
       setIsRendering(false);
+    };
+
+    const handleMessage = (event: MessageEvent<OpenScadWorkerResponse>) => {
+      void handleWorkerMessage(event);
     };
 
     const handleWorkerError = (event: ErrorEvent) => {
@@ -326,8 +483,22 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
       workerRef.current = null;
       isWorkerRenderingRef.current = false;
       activeRequestRef.current = null;
+      activeCacheRef.current = null;
     };
   }, [hasMounted, startRender]);
+
+  const downloadCurrentStl = () => {
+    if (!stl || !isPreviewCurrent) {
+      return;
+    }
+
+    if (cachedDownloadUrl && cachedDownloadParamsKey === currentParamsKey) {
+      downloadUrl("gridfinity-bin.stl", cachedDownloadUrl);
+      return;
+    }
+
+    downloadBlob("gridfinity-bin.stl", new Blob([toArrayBuffer(stl)], { type: "model/stl" }));
+  };
 
   const commitNumberField = (field: NumberField) => {
     const config = numberFields[field];
@@ -407,142 +578,146 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
           <h2>Bin parameters</h2>
         </div>
 
-        <div className={styles.formShell}>
-          {Object.entries(numberFields).map(([field, config]) => (
-            <label className={styles.field} key={field}>
-              <span>{config.label}</span>
-              <div className={styles.inputWrap}>
-                <input
-                  inputMode="decimal"
-                  type="text"
-                  value={draft[field as NumberField]}
-                  onBlur={() => commitNumberField(field as NumberField)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.currentTarget.blur();
+        <div className={styles.panelScroll}>
+          <div className={styles.formShell}>
+            {Object.entries(numberFields).map(([field, config]) => (
+              <label className={styles.field} key={field}>
+                <span>{config.label}</span>
+                <div className={styles.inputWrap}>
+                  <input
+                    inputMode="decimal"
+                    type="text"
+                    value={draft[field as NumberField]}
+                    onBlur={() => commitNumberField(field as NumberField)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.currentTarget.blur();
+                      }
+                    }}
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        [field]: event.target.value,
+                      }))
                     }
+                  />
+                  {config.suffix ? <small>{config.suffix}</small> : null}
+                </div>
+              </label>
+            ))}
+
+            <label className={styles.field}>
+              <span>Lip style</span>
+              <select
+                value={params.lipStyle}
+                onChange={(event) => {
+                  setRenderError("");
+                  setParams((current) => ({
+                    ...current,
+                    lipStyle: event.target.value as GridfinityBinParameters["lipStyle"],
+                  }));
+                }}
+              >
+                <option value="normal">Normal</option>
+                <option value="reduced">Reduced</option>
+                <option value="minimum">Minimum</option>
+                <option value="none">None</option>
+              </select>
+            </label>
+
+            <label className={styles.field}>
+              <span>Label shelf</span>
+              <select
+                value={params.labelStyle}
+                onChange={(event) => {
+                  setRenderError("");
+                  setParams((current) => ({
+                    ...current,
+                    labelStyle: event.target.value as GridfinityBinParameters["labelStyle"],
+                  }));
+                }}
+              >
+                <option value="disabled">Disabled</option>
+                <option value="normal">Normal</option>
+                <option value="gflabel">Gridfinity label</option>
+              </select>
+            </label>
+
+            <label className={styles.field}>
+              <span>Label position</span>
+              <select
+                value={params.labelPosition}
+                onChange={(event) => {
+                  setRenderError("");
+                  setParams((current) => ({
+                    ...current,
+                    labelPosition: event.target.value as GridfinityBinParameters["labelPosition"],
+                  }));
+                }}
+              >
+                <option value="left">Left</option>
+                <option value="center">Center</option>
+                <option value="right">Right</option>
+              </select>
+            </label>
+
+            <label className={styles.field}>
+              <span>Finger slide</span>
+              <select
+                value={params.fingerslide}
+                onChange={(event) => {
+                  setRenderError("");
+                  setParams((current) => ({
+                    ...current,
+                    fingerslide: event.target.value as GridfinityBinParameters["fingerslide"],
+                  }));
+                }}
+              >
+                <option value="none">None</option>
+                <option value="rounded">Rounded</option>
+                <option value="chamfered">Chamfered</option>
+              </select>
+            </label>
+
+            <div className={styles.switchGrid}>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={params.magnets}
+                  onChange={(event) => {
+                    setRenderError("");
+                    setParams((current) => ({ ...current, magnets: event.target.checked }));
                   }}
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      [field]: event.target.value,
-                    }))
-                  }
                 />
-                {config.suffix ? <small>{config.suffix}</small> : null}
-              </div>
-            </label>
-          ))}
-
-          <label className={styles.field}>
-            <span>Lip style</span>
-            <select
-              value={params.lipStyle}
-              onChange={(event) => {
-                setRenderError("");
-                setParams((current) => ({
-                  ...current,
-                  lipStyle: event.target.value as GridfinityBinParameters["lipStyle"],
-                }));
-              }}
-            >
-              <option value="normal">Normal</option>
-              <option value="reduced">Reduced</option>
-              <option value="minimum">Minimum</option>
-              <option value="none">None</option>
-            </select>
-          </label>
-
-          <label className={styles.field}>
-            <span>Label shelf</span>
-            <select
-              value={params.labelStyle}
-              onChange={(event) => {
-                setRenderError("");
-                setParams((current) => ({
-                  ...current,
-                  labelStyle: event.target.value as GridfinityBinParameters["labelStyle"],
-                }));
-              }}
-            >
-              <option value="disabled">Disabled</option>
-              <option value="normal">Normal</option>
-              <option value="gflabel">Gridfinity label</option>
-            </select>
-          </label>
-
-          <label className={styles.field}>
-            <span>Label position</span>
-            <select
-              value={params.labelPosition}
-              onChange={(event) => {
-                setRenderError("");
-                setParams((current) => ({
-                  ...current,
-                  labelPosition: event.target.value as GridfinityBinParameters["labelPosition"],
-                }));
-              }}
-            >
-              <option value="left">Left</option>
-              <option value="center">Center</option>
-              <option value="right">Right</option>
-            </select>
-          </label>
-
-          <label className={styles.field}>
-            <span>Finger slide</span>
-            <select
-              value={params.fingerslide}
-              onChange={(event) => {
-                setRenderError("");
-                setParams((current) => ({
-                  ...current,
-                  fingerslide: event.target.value as GridfinityBinParameters["fingerslide"],
-                }));
-              }}
-            >
-              <option value="none">None</option>
-              <option value="rounded">Rounded</option>
-              <option value="chamfered">Chamfered</option>
-            </select>
-          </label>
-
-          <div className={styles.switchGrid}>
-            <label>
-              <input
-                type="checkbox"
-                checked={params.magnets}
-                onChange={(event) => {
-                  setRenderError("");
-                  setParams((current) => ({ ...current, magnets: event.target.checked }));
-                }}
-              />
-              <span>Magnets</span>
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={params.screws}
-                onChange={(event) => {
-                  setRenderError("");
-                  setParams((current) => ({ ...current, screws: event.target.checked }));
-                }}
-              />
-              <span>Screws</span>
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={params.filledIn}
-                onChange={(event) => {
-                  setRenderError("");
-                  setParams((current) => ({ ...current, filledIn: event.target.checked }));
-                }}
-              />
-              <span>Solid block</span>
-            </label>
+                <span>Magnets</span>
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={params.screws}
+                  onChange={(event) => {
+                    setRenderError("");
+                    setParams((current) => ({ ...current, screws: event.target.checked }));
+                  }}
+                />
+                <span>Screws</span>
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={params.filledIn}
+                  onChange={(event) => {
+                    setRenderError("");
+                    setParams((current) => ({ ...current, filledIn: event.target.checked }));
+                  }}
+                />
+                <span>Solid block</span>
+              </label>
+            </div>
           </div>
+        </div>
 
+        <div className={styles.panelActions}>
           <div className={styles.actionRow}>
             <button
               className={styles.generateButton}
@@ -550,6 +725,7 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
               onClick={() => requestRender(params)}
               type="button"
             >
+              <Play aria-hidden="true" size={16} />
               Generate
             </button>
             <button
@@ -587,46 +763,47 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
           <h2>Model output</h2>
         </div>
 
-        <div className={styles.outputList}>
-          <div>
-            <span>Model</span>
-            <strong>
-              {params.widthUnits} x {params.depthUnits} x {params.heightUnits} bin
-            </strong>
+        <div className={styles.panelScroll}>
+          <div className={styles.outputList}>
+            <div>
+              <span>Model</span>
+              <strong>
+                {params.widthUnits} x {params.depthUnits} x {params.heightUnits} bin
+              </strong>
+            </div>
+            <div>
+              <span>Dimensions</span>
+              <strong>
+                {dimensions.width.toFixed(1)} x {dimensions.depth.toFixed(1)} x{" "}
+                {dimensions.height.toFixed(1)} mm
+              </strong>
+            </div>
           </div>
-          <div>
-            <span>Dimensions</span>
-            <strong>
-              {dimensions.width.toFixed(1)} x {dimensions.depth.toFixed(1)} x{" "}
-              {dimensions.height.toFixed(1)} mm
-            </strong>
+        </div>
+
+        <div className={styles.panelActions}>
+          <div className={styles.outputActions}>
+            <button
+              type="button"
+              disabled={!isPreviewCurrent}
+              onClick={downloadCurrentStl}
+            >
+              <Download aria-hidden="true" size={16} />
+              STL
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                downloadBlob(
+                  "gridfinity-bin.scad",
+                  new Blob([scadSnippet], { type: "text/plain" }),
+                )
+              }
+            >
+              <Code2 aria-hidden="true" size={16} />
+              SCAD
+            </button>
           </div>
-          <button
-            type="button"
-            disabled={!isPreviewCurrent}
-            onClick={() =>
-              stl &&
-              downloadBlob(
-                "gridfinity-bin.stl",
-                new Blob([toArrayBuffer(stl)], { type: "model/stl" }),
-              )
-            }
-          >
-            <Download aria-hidden="true" size={16} />
-            STL
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              downloadBlob(
-                "gridfinity-bin.scad",
-                new Blob([scadSnippet], { type: "text/plain" }),
-              )
-            }
-          >
-            <Code2 aria-hidden="true" size={16} />
-            SCAD
-          </button>
         </div>
       </section>
     </div>
