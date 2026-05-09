@@ -8,8 +8,6 @@ import {
 import { getGridfinityExtendedSourceFingerprint } from "@/lib/openscad/sourceFingerprint";
 import {
   createPresignedR2Url,
-  createR2ObjectUrl,
-  createSignedR2Headers,
   getR2Config,
 } from "@/lib/r2/signing";
 
@@ -34,6 +32,10 @@ function stableStringify(value: unknown): string {
 
 function sha256(value: string) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function createCachedObjectApiUrl(objectKey: string) {
+  return `/api/bin-generator/r2-cache/object?key=${encodeURIComponent(objectKey)}`;
 }
 
 export async function POST(request: Request) {
@@ -67,14 +69,20 @@ export async function POST(request: Request) {
     });
   }
 
-  const objectUrl = createR2ObjectUrl(config, objectKey);
-  const headResponse = await fetch(objectUrl, {
-    method: "HEAD",
-    headers: createSignedR2Headers(config, objectKey, "HEAD"),
+  const downloadUrl = createPresignedR2Url({
+    config,
+    key: objectKey,
+    method: "GET",
+    expiresSeconds: 60 * 60,
+  });
+  const lookupResponse = await fetch(downloadUrl, {
+    headers: {
+      Range: "bytes=0-0",
+    },
     cache: "no-store",
   });
 
-  if (headResponse.ok) {
+  if (lookupResponse.ok || lookupResponse.status === 206) {
     return NextResponse.json({
       enabled: true,
       hit: true,
@@ -82,23 +90,26 @@ export async function POST(request: Request) {
       sourceFingerprint,
       settingsHash,
       objectKey,
-      downloadUrl: createPresignedR2Url({
-        config,
-        key: objectKey,
-        method: "GET",
-        expiresSeconds: 60 * 60,
-      }),
+      downloadUrl: createCachedObjectApiUrl(objectKey),
     });
   }
 
-  if (headResponse.status !== 404) {
-    return NextResponse.json(
-      {
-        error: "R2 cache lookup failed.",
-        status: headResponse.status,
-      },
-      { status: 502 },
-    );
+  if (lookupResponse.status !== 404) {
+    const details = await lookupResponse.text().catch(() => "");
+    console.error("R2 cache lookup failed.", {
+      status: lookupResponse.status,
+      objectKey,
+      details,
+    });
+
+    return NextResponse.json({
+      enabled: false,
+      reason: `R2 cache lookup failed with status ${lookupResponse.status}.`,
+      model: gridfinityBinCacheModel,
+      sourceFingerprint,
+      settingsHash,
+      objectKey,
+    });
   }
 
   return NextResponse.json({
@@ -114,11 +125,6 @@ export async function POST(request: Request) {
       method: "PUT",
       expiresSeconds: 10 * 60,
     }),
-    downloadUrl: createPresignedR2Url({
-      config,
-      key: objectKey,
-      method: "GET",
-      expiresSeconds: 60 * 60,
-    }),
+    downloadUrl: createCachedObjectApiUrl(objectKey),
   });
 }
