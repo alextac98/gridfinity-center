@@ -70,15 +70,20 @@ export function getR2Config(): R2Config | null {
     R2_BUCKET_NAME,
   } = process.env;
 
-  if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY || !R2_BUCKET_NAME) {
+  const accountId = R2_ACCOUNT_ID?.trim();
+  const accessKeyId = R2_ACCESS_KEY_ID?.trim();
+  const secretAccessKey = R2_SECRET_ACCESS_KEY?.trim();
+  const bucketName = R2_BUCKET_NAME?.trim();
+
+  if (!accountId || !accessKeyId || !secretAccessKey || !bucketName) {
     return null;
   }
 
   return {
-    accountId: R2_ACCOUNT_ID,
-    accessKeyId: R2_ACCESS_KEY_ID,
-    secretAccessKey: R2_SECRET_ACCESS_KEY,
-    bucketName: R2_BUCKET_NAME,
+    accountId,
+    accessKeyId,
+    secretAccessKey,
+    bucketName,
   };
 }
 
