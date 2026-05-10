@@ -105,6 +105,7 @@ const lipDetailKeys = new Set([
   "lip_clip_position",
   "lip_non_blocking",
 ]);
+const expandedSectionsStorageKey = "gridfinity-bin-generator-expanded-sections";
 
 type ParameterSearchItem = {
   id: string;
@@ -298,6 +299,34 @@ function toWallCutoutPositionDisplayTuple(
     : [];
 }
 
+function readExpandedSections() {
+  if (typeof window === "undefined") {
+    return {};
+  }
+
+  const storedSections = window.localStorage.getItem(expandedSectionsStorageKey);
+
+  if (!storedSections) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(storedSections) as unknown;
+
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        (entry): entry is [string, boolean] => typeof entry[1] === "boolean",
+      ),
+    );
+  } catch {
+    return {};
+  }
+}
+
 export function BinParametersPanel({
   params,
   draft,
@@ -312,9 +341,16 @@ export function BinParametersPanel({
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedSections, setExpandedSections] = useState<
     Record<string, boolean>
-  >({});
+  >(readExpandedSections);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const searchResults = useMemo(() => getSearchResults(searchQuery), [searchQuery]);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      expandedSectionsStorageKey,
+      JSON.stringify(expandedSections),
+    );
+  }, [expandedSections]);
 
   useEffect(() => {
     if (!isSearchOpen) {

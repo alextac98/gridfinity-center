@@ -385,6 +385,138 @@ const defaults = {
   showQr: true,
   isCustomArtwork: false,
 };
+const labelSettingsStorageKey = "gridfinity-label-generator-settings";
+
+type LabelGeneratorSettings = typeof defaults & {
+  customPrimaryImage: string;
+  customSecondaryImage: string;
+};
+
+const defaultLabelSettings: LabelGeneratorSettings = {
+  ...defaults,
+  customPrimaryImage: "",
+  customSecondaryImage: "",
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function readString<T extends string>(
+  value: unknown,
+  fallback: T,
+  allowedValues: readonly T[],
+): T {
+  return typeof value === "string" && allowedValues.includes(value as T)
+    ? value as T
+    : fallback;
+}
+
+function readStoredLabelSettings(): LabelGeneratorSettings {
+  if (typeof window === "undefined") {
+    return defaultLabelSettings;
+  }
+
+  const storedSettings = window.localStorage.getItem(labelSettingsStorageKey);
+
+  if (!storedSettings) {
+    return defaultLabelSettings;
+  }
+
+  try {
+    const parsed = JSON.parse(storedSettings) as unknown;
+
+    if (!isRecord(parsed)) {
+      return defaultLabelSettings;
+    }
+
+    return {
+      fastenerId: readString(
+        parsed.fastenerId,
+        defaults.fastenerId,
+        fasteners.map((fastener) => fastener.id),
+      ),
+      itemName:
+        typeof parsed.itemName === "string"
+          ? parsed.itemName
+          : defaults.itemName,
+      sizeId: readString(
+        parsed.sizeId,
+        defaults.sizeId,
+        labelSizes.map((size) => size.id),
+      ),
+      measurementSystem: readString(
+        parsed.measurementSystem,
+        defaults.measurementSystem,
+        ["metric", "imperial"],
+      ),
+      threadSize:
+        typeof parsed.threadSize === "string"
+          ? parsed.threadSize
+          : defaults.threadSize,
+      pitch: typeof parsed.pitch === "string" ? parsed.pitch : defaults.pitch,
+      length:
+        typeof parsed.length === "string" ? parsed.length : defaults.length,
+      note: typeof parsed.note === "string" ? parsed.note : defaults.note,
+      qrUrl: typeof parsed.qrUrl === "string" ? parsed.qrUrl : defaults.qrUrl,
+      standardMode: readString(
+        parsed.standardMode,
+        defaults.standardMode,
+        ["iso", "din", "both"],
+      ),
+      showStandard:
+        typeof parsed.showStandard === "boolean"
+          ? parsed.showStandard
+          : defaults.showStandard,
+      showPrimaryImage:
+        typeof parsed.showPrimaryImage === "boolean"
+          ? parsed.showPrimaryImage
+          : defaults.showPrimaryImage,
+      showSecondaryImage:
+        typeof parsed.showSecondaryImage === "boolean"
+          ? parsed.showSecondaryImage
+          : defaults.showSecondaryImage,
+      showQr:
+        typeof parsed.showQr === "boolean" ? parsed.showQr : defaults.showQr,
+      isCustomArtwork:
+        typeof parsed.isCustomArtwork === "boolean"
+          ? parsed.isCustomArtwork
+          : defaults.isCustomArtwork,
+      customPrimaryImage:
+        typeof parsed.customPrimaryImage === "string"
+          ? parsed.customPrimaryImage
+          : "",
+      customSecondaryImage:
+        typeof parsed.customSecondaryImage === "string"
+          ? parsed.customSecondaryImage
+          : "",
+    };
+  } catch {
+    return defaultLabelSettings;
+  }
+}
+
+function writeStoredLabelSettings(settings: LabelGeneratorSettings) {
+  try {
+    window.localStorage.setItem(
+      labelSettingsStorageKey,
+      JSON.stringify(settings),
+    );
+  } catch {
+    try {
+      window.localStorage.setItem(
+        labelSettingsStorageKey,
+        JSON.stringify({
+          ...settings,
+          customPrimaryImage: "",
+          customSecondaryImage: "",
+        }),
+      );
+    } catch {
+      // Browser storage can be disabled or full; keep the editor usable.
+    }
+  }
+}
 
 function getFastener(id: FastenerId) {
   return fasteners.find((fastener) => fastener.id === id) ?? fasteners[0];
@@ -561,6 +693,7 @@ function CustomArtworkPlaceholder({ profile }: { profile: "side" | "top" }) {
 }
 
 export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
+  const [hasLoadedStoredSettings, setHasLoadedStoredSettings] = useState(false);
   const [fastenerId, setFastenerId] = useState(defaults.fastenerId);
   const [itemName, setItemName] = useState(defaults.itemName);
   const [sizeId, setSizeId] = useState(defaults.sizeId);
@@ -663,6 +796,78 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
   );
 
   useEffect(() => {
+    const restoreTimer = window.setTimeout(() => {
+      const settings = readStoredLabelSettings();
+
+      setFastenerId(settings.fastenerId);
+      setItemName(settings.itemName);
+      setSizeId(settings.sizeId);
+      setMeasurementSystem(settings.measurementSystem);
+      setThreadSize(settings.threadSize);
+      setPitch(settings.pitch);
+      setLength(settings.length);
+      setNote(settings.note);
+      setQrUrl(settings.qrUrl);
+      setStandardMode(settings.standardMode);
+      setShowStandard(settings.showStandard);
+      setShowPrimaryImage(settings.showPrimaryImage);
+      setShowSecondaryImage(settings.showSecondaryImage);
+      setShowQr(settings.showQr);
+      setIsCustomArtwork(settings.isCustomArtwork);
+      setCustomPrimaryImage(settings.customPrimaryImage);
+      setCustomSecondaryImage(settings.customSecondaryImage);
+      setHasLoadedStoredSettings(true);
+    }, 0);
+
+    return () => window.clearTimeout(restoreTimer);
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedStoredSettings) {
+      return;
+    }
+
+    writeStoredLabelSettings({
+      fastenerId,
+      itemName,
+      sizeId,
+      measurementSystem,
+      threadSize,
+      pitch,
+      length,
+      note,
+      qrUrl,
+      standardMode,
+      showStandard,
+      showPrimaryImage,
+      showSecondaryImage,
+      showQr,
+      isCustomArtwork,
+      customPrimaryImage,
+      customSecondaryImage,
+    });
+  }, [
+    customPrimaryImage,
+    customSecondaryImage,
+    fastenerId,
+    hasLoadedStoredSettings,
+    isCustomArtwork,
+    itemName,
+    length,
+    measurementSystem,
+    note,
+    pitch,
+    qrUrl,
+    showPrimaryImage,
+    showQr,
+    showSecondaryImage,
+    showStandard,
+    sizeId,
+    standardMode,
+    threadSize,
+  ]);
+
+  useEffect(() => {
     let isCurrent = true;
     if (!showQr || trimmedQrUrl.length === 0) {
       return;
@@ -713,23 +918,24 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
   }
 
   function resetLabel() {
-    setFastenerId(defaults.fastenerId);
-    setItemName(defaults.itemName);
-    setSizeId(defaults.sizeId);
-    setMeasurementSystem(defaults.measurementSystem);
-    setThreadSize(defaults.threadSize);
-    setPitch(defaults.pitch);
-    setLength(defaults.length);
-    setNote(defaults.note);
-    setQrUrl(defaults.qrUrl);
-    setStandardMode(defaults.standardMode);
-    setShowStandard(defaults.showStandard);
-    setShowPrimaryImage(defaults.showPrimaryImage);
-    setShowSecondaryImage(defaults.showSecondaryImage);
-    setShowQr(defaults.showQr);
-    setIsCustomArtwork(defaults.isCustomArtwork);
-    setCustomPrimaryImage("");
-    setCustomSecondaryImage("");
+    setFastenerId(defaultLabelSettings.fastenerId);
+    setItemName(defaultLabelSettings.itemName);
+    setSizeId(defaultLabelSettings.sizeId);
+    setMeasurementSystem(defaultLabelSettings.measurementSystem);
+    setThreadSize(defaultLabelSettings.threadSize);
+    setPitch(defaultLabelSettings.pitch);
+    setLength(defaultLabelSettings.length);
+    setNote(defaultLabelSettings.note);
+    setQrUrl(defaultLabelSettings.qrUrl);
+    setStandardMode(defaultLabelSettings.standardMode);
+    setShowStandard(defaultLabelSettings.showStandard);
+    setShowPrimaryImage(defaultLabelSettings.showPrimaryImage);
+    setShowSecondaryImage(defaultLabelSettings.showSecondaryImage);
+    setShowQr(defaultLabelSettings.showQr);
+    setIsCustomArtwork(defaultLabelSettings.isCustomArtwork);
+    setCustomPrimaryImage(defaultLabelSettings.customPrimaryImage);
+    setCustomSecondaryImage(defaultLabelSettings.customSecondaryImage);
+    writeStoredLabelSettings(defaultLabelSettings);
   }
 
   function selectMeasurementSystem(system: MeasurementSystem) {

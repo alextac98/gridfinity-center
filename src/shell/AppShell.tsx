@@ -9,11 +9,18 @@ import {
   Sun,
   X,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { AppUpcoming } from "@/apps/AppUpcoming";
 import { ToastProvider } from "./ToastProvider";
-import { apps, getAppPath, type RegisteredAppId } from "./appRegistry";
+import {
+  apps,
+  defaultAppId,
+  getAppPath,
+  isRegisteredAppId,
+  type RegisteredApp,
+  type RegisteredAppId,
+} from "./appRegistry";
 import styles from "./AppShell.module.css";
 
 function getPreferredTheme(): "light" | "dark" {
@@ -47,10 +54,6 @@ function setStoredTheme(theme: "light" | "dark") {
   window.dispatchEvent(new Event("gridfinity-theme-change"));
 }
 
-type AppShellProps = {
-  activeAppId: RegisteredAppId;
-};
-
 function GitHubMark({ size = 18 }: { size?: number }) {
   return (
     <svg
@@ -65,18 +68,81 @@ function GitHubMark({ size = 18 }: { size?: number }) {
   );
 }
 
-export function AppShell({ activeAppId }: AppShellProps) {
+function getActiveAppId(pathname: string): RegisteredAppId {
+  const appId = pathname.split("/").filter(Boolean)[0];
+
+  return appId && isRegisteredAppId(appId) ? appId : defaultAppId;
+}
+
+function AppWorkspacePanel({
+  app,
+  isActive,
+}: {
+  app: RegisteredApp;
+  isActive: boolean;
+}) {
+  return (
+    <section
+      aria-labelledby={`${app.id}-tab`}
+      className={`${styles.workspacePanel} ${
+        isActive ? "" : styles.hiddenWorkspacePanel
+      }`}
+      hidden={!isActive}
+      id={`${app.id}-panel`}
+      role="tabpanel"
+    >
+      <header className={styles.topbar}>
+        <div className={styles.topbarTitle}>
+          <h1>{app.name}</h1>
+        </div>
+        <p className={styles.topbarDescription}>{app.description}</p>
+      </header>
+
+      {"Component" in app ? (
+        <app.Component accent={app.accent} />
+      ) : (
+        <AppUpcoming
+          accent={app.accent}
+          description={app.description}
+          icon={app.icon}
+          name={app.name}
+        />
+      )}
+    </section>
+  );
+}
+
+export function AppShell() {
   const router = useRouter();
+  const pathname = usePathname();
+  const activeAppId = getActiveAppId(pathname);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
+  const [visitedAppIds, setVisitedAppIds] = useState<RegisteredAppId[]>(() => [
+    activeAppId,
+  ]);
   const theme = useSyncExternalStore(
     subscribeToThemeStore,
     getPreferredTheme,
     getServerThemeSnapshot,
   );
   const activeApp = apps.find((app) => app.id === activeAppId) ?? apps[0];
+  const visitedApps = useMemo(() => {
+    const mountedAppIds = visitedAppIds.includes(activeAppId)
+      ? visitedAppIds
+      : [...visitedAppIds, activeAppId];
+
+    return apps.filter((app) => mountedAppIds.includes(app.id));
+  }, [activeAppId, visitedAppIds]);
   const isDark = theme === "dark";
   const currentYear = new Date().getFullYear();
+
+  const navigateToApp = (appId: RegisteredAppId) => {
+    setVisitedAppIds((current) =>
+      current.includes(appId) ? current : [...current, appId],
+    );
+    router.push(getAppPath(appId), { scroll: false });
+  };
 
   useEffect(() => {
     if (!isAboutOpen) {
@@ -144,9 +210,7 @@ export function AppShell({ activeAppId }: AppShellProps) {
                 className={isActive ? styles.activeTab : styles.appTab}
                 id={`${app.id}-tab`}
                 key={app.id}
-                onClick={() =>
-                  router.push(getAppPath(app.id), { scroll: false })
-                }
+                onClick={() => navigateToApp(app.id)}
                 role="tab"
                 title={app.name}
                 type="button"
@@ -198,30 +262,15 @@ export function AppShell({ activeAppId }: AppShellProps) {
       </aside>
 
       <ToastProvider>
-        <section
-          aria-labelledby={`${activeApp.id}-tab`}
-          className={styles.workspace}
-          id={`${activeApp.id}-panel`}
-          role="tabpanel"
-        >
-          <header className={styles.topbar}>
-            <div className={styles.topbarTitle}>
-              <h1>{activeApp.name}</h1>
-            </div>
-            <p className={styles.topbarDescription}>{activeApp.description}</p>
-          </header>
-
-          {"Component" in activeApp ? (
-            <activeApp.Component accent={activeApp.accent} />
-          ) : (
-            <AppUpcoming
-              accent={activeApp.accent}
-              description={activeApp.description}
-              icon={activeApp.icon}
-              name={activeApp.name}
+        <div className={styles.workspace}>
+          {visitedApps.map((app) => (
+            <AppWorkspacePanel
+              app={app}
+              isActive={app.id === activeApp.id}
+              key={app.id}
             />
-          )}
-        </section>
+          ))}
+        </div>
       </ToastProvider>
 
       {isAboutOpen ? (

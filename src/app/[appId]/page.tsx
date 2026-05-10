@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import { AppShell } from "@/shell/AppShell";
 import { apps, isRegisteredAppId } from "@/shell/appRegistry";
 
 type AppPageProps = {
@@ -15,7 +14,7 @@ export default async function AppPage({ params }: AppPageProps) {
     notFound();
   }
 
-  return <AppShell activeAppId={appId} />;
+  return null;
 }
 
 export function generateStaticParams() {

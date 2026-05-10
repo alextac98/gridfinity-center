@@ -41,7 +41,7 @@ type R2CacheResponse =
       uploadUrl?: string;
     };
 
-const defaultParamsKey = createParamsKey(defaultGridfinityBinParameters);
+const binSettingsStorageKey = "gridfinity-bin-generator-settings";
 const defaultGroundPlaneDraft = {
   widthMm: "250",
   depthMm: "250",
@@ -54,6 +54,211 @@ type GroundPlanePreference = {
   depthMm: string;
   selectedBuildPlatePresetName: string;
 };
+
+type StoredBinGeneratorSettings = {
+  params: GridfinityBinParameters;
+  draft: Record<NumberField, string>;
+};
+
+const lipStyles = ["normal", "reduced", "reduced_double", "minimum", "none"] as const;
+const labelStyles = [
+  "disabled",
+  "normal",
+  "gflabel",
+  "pred",
+  "cullenect",
+  "cullenect_legacy",
+] as const;
+const labelPositions = [
+  "left",
+  "center",
+  "right",
+  "leftchamber",
+  "centerchamber",
+  "rightchamber",
+] as const;
+const fingerSlides = ["none", "rounded", "chamfered"] as const;
+const flatBases = ["off", "gridfinity", "rounded"] as const;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isStorageValue(value: unknown): value is GridfinityBinParameters["extraDefines"][string] {
+  if (
+    typeof value === "string" ||
+    typeof value === "boolean" ||
+    (typeof value === "number" && Number.isFinite(value))
+  ) {
+    return true;
+  }
+
+  return Array.isArray(value) && value.every(isStorageValue);
+}
+
+function cloneDefaultBinParameters(): GridfinityBinParameters {
+  return {
+    ...defaultGridfinityBinParameters,
+    extraDefines: { ...defaultGridfinityBinParameters.extraDefines },
+  };
+}
+
+function createDraftFromParams(params: GridfinityBinParameters) {
+  return Object.fromEntries(
+    Object.keys(numberFields).map((key) => [
+      key,
+      String(params[key as NumberField]),
+    ]),
+  ) as Record<NumberField, string>;
+}
+
+function readString<T extends string>(
+  value: unknown,
+  fallback: T,
+  allowedValues: readonly T[],
+): T {
+  return typeof value === "string" && allowedValues.includes(value as T)
+    ? value as T
+    : fallback;
+}
+
+function readNumberField(
+  value: unknown,
+  fallback: number,
+  field: NumberField,
+) {
+  const config = numberFields[field];
+
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return Math.min(Math.max(value, config.min), config.max);
+}
+
+function readStoredBinSettings(): StoredBinGeneratorSettings {
+  const defaults = cloneDefaultBinParameters();
+  const defaultDraft = createDraftFromParams(defaults);
+
+  if (typeof window === "undefined") {
+    return { params: defaults, draft: defaultDraft };
+  }
+
+  const storedSettings = window.localStorage.getItem(binSettingsStorageKey);
+
+  if (!storedSettings) {
+    return { params: defaults, draft: defaultDraft };
+  }
+
+  try {
+    const parsed = JSON.parse(storedSettings) as unknown;
+    const storedParams = isRecord(parsed)
+      ? isRecord(parsed.params)
+        ? parsed.params
+        : parsed
+      : {};
+    const storedDraft = isRecord(parsed) && isRecord(parsed.draft)
+      ? parsed.draft
+      : {};
+    const storedExtraDefines = isRecord(storedParams.extraDefines)
+      ? storedParams.extraDefines
+      : {};
+    const extraDefines = { ...defaults.extraDefines };
+
+    for (const [key, value] of Object.entries(storedExtraDefines)) {
+      if (isStorageValue(value)) {
+        extraDefines[key] = value;
+      }
+    }
+
+    const params: GridfinityBinParameters = {
+      ...defaults,
+      widthUnits: readNumberField(
+        storedParams.widthUnits,
+        defaults.widthUnits,
+        "widthUnits",
+      ),
+      depthUnits: readNumberField(
+        storedParams.depthUnits,
+        defaults.depthUnits,
+        "depthUnits",
+      ),
+      heightUnits: readNumberField(
+        storedParams.heightUnits,
+        defaults.heightUnits,
+        "heightUnits",
+      ),
+      verticalChambers: readNumberField(
+        storedParams.verticalChambers,
+        defaults.verticalChambers,
+        "verticalChambers",
+      ),
+      horizontalChambers: readNumberField(
+        storedParams.horizontalChambers,
+        defaults.horizontalChambers,
+        "horizontalChambers",
+      ),
+      wallThicknessMm: readNumberField(
+        storedParams.wallThicknessMm,
+        defaults.wallThicknessMm,
+        "wallThicknessMm",
+      ),
+      lipStyle: readString(storedParams.lipStyle, defaults.lipStyle, lipStyles),
+      labelStyle: readString(
+        storedParams.labelStyle,
+        defaults.labelStyle,
+        labelStyles,
+      ),
+      labelPosition: readString(
+        storedParams.labelPosition,
+        defaults.labelPosition,
+        labelPositions,
+      ),
+      fingerslide: readString(
+        storedParams.fingerslide,
+        defaults.fingerslide,
+        fingerSlides,
+      ),
+      flatBase: readString(storedParams.flatBase, defaults.flatBase, flatBases),
+      magnets:
+        typeof storedParams.magnets === "boolean"
+          ? storedParams.magnets
+          : defaults.magnets,
+      screws:
+        typeof storedParams.screws === "boolean"
+          ? storedParams.screws
+          : defaults.screws,
+      filledIn:
+        typeof storedParams.filledIn === "boolean"
+          ? storedParams.filledIn
+          : defaults.filledIn,
+      extraDefines,
+    };
+    const draft = createDraftFromParams(params);
+
+    for (const key of Object.keys(numberFields) as NumberField[]) {
+      const value = storedDraft[key];
+
+      if (typeof value === "string") {
+        draft[key] = value;
+      }
+    }
+
+    return { params, draft };
+  } catch {
+    return { params: defaults, draft: defaultDraft };
+  }
+}
+
+function writeStoredBinSettings(
+  params: GridfinityBinParameters,
+  draft: Record<NumberField, string>,
+) {
+  window.localStorage.setItem(
+    binSettingsStorageKey,
+    JSON.stringify({ params, draft }),
+  );
+}
 
 function parseGroundPlaneDimension(value: string) {
   const dimension = Number.parseFloat(value);
@@ -263,16 +468,11 @@ async function uploadStlThroughApi(objectKey: string, stlBytes: Uint8Array) {
 }
 
 export function BinGeneratorApp({ accent }: GridfinityAppProps) {
+  const [initialSettings] = useState(readStoredBinSettings);
+
   const [hasMounted, setHasMounted] = useState(false);
-  const [params, setParams] = useState(defaultGridfinityBinParameters);
-  const [draft, setDraft] = useState(
-    Object.fromEntries(
-      Object.keys(numberFields).map((key) => [
-        key,
-        String(defaultGridfinityBinParameters[key as NumberField]),
-      ]),
-    ) as Record<NumberField, string>,
-  );
+  const [params, setParams] = useState(initialSettings.params);
+  const [draft, setDraft] = useState(initialSettings.draft);
   const [stl, setStl] = useState<Uint8Array>();
   const [generatedParamsKey, setGeneratedParamsKey] = useState("");
   const [renderStatus, setRenderStatus] = useState("Preparing OpenSCAD Worker");
@@ -280,8 +480,7 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
   const [isRendering, setIsRendering] = useState(true);
   const renderSequenceRef = useRef(0);
   const workerRef = useRef<Worker | null>(null);
-  const latestParamsRef = useRef(defaultGridfinityBinParameters);
-  const latestParamsKeyRef = useRef(defaultParamsKey);
+  const latestParamsRef = useRef(initialSettings.params);
   const activeRequestRef = useRef<number | null>(null);
   const activeParamsKeyRef = useRef("");
   const isWorkerRenderingRef = useRef(false);
@@ -341,6 +540,10 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
   }, []);
 
   useEffect(() => {
+    writeStoredBinSettings(params, draft);
+  }, [draft, params]);
+
+  useEffect(() => {
     window.localStorage.setItem(
       groundPlaneStorageKey,
       JSON.stringify(groundPlanePreference),
@@ -379,7 +582,6 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
     async (nextParams: GridfinityBinParameters) => {
       const nextParamsKey = createParamsKey(nextParams);
       latestParamsRef.current = nextParams;
-      latestParamsKeyRef.current = nextParamsKey;
       activeCacheRef.current = null;
       setRenderError("");
 
@@ -544,7 +746,7 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
     worker.addEventListener("message", handleMessage);
     worker.addEventListener("error", handleWorkerError);
     const initialRenderTimer = window.setTimeout(() => {
-      void requestRender(defaultGridfinityBinParameters);
+      void requestRender(latestParamsRef.current);
     }, 0);
 
     return () => {
@@ -590,22 +792,19 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
       : "";
 
   const reset = () => {
+    const defaultParams = cloneDefaultBinParameters();
+    const defaultDraft = createDraftFromParams(defaultParams);
+
     setRenderError("");
-    setParams(defaultGridfinityBinParameters);
+    setParams(defaultParams);
     setStl(undefined);
     setGeneratedParamsKey("");
     setCachedDownloadUrl("");
     setCachedDownloadParamsKey("");
     setRenderStatus("Checking Model Cache");
-    setDraft(
-      Object.fromEntries(
-        Object.keys(numberFields).map((key) => [
-          key,
-          String(defaultGridfinityBinParameters[key as NumberField]),
-        ]),
-      ) as Record<NumberField, string>,
-    );
-    void requestRender(defaultGridfinityBinParameters);
+    setDraft(defaultDraft);
+    writeStoredBinSettings(defaultParams, defaultDraft);
+    void requestRender(defaultParams);
   };
 
   if (!hasMounted) {
@@ -670,6 +869,7 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
           groundPlane={groundPlane}
           isLoading={isRendering}
           loadingMessage={isRendering ? renderStatus : undefined}
+          viewStorageKey="gridfinity-bin-generator-preview-view"
         />
       </section>
 

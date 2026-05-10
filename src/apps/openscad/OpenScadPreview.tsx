@@ -38,6 +38,7 @@ type OpenScadPreviewProps = {
   groundPlane?: GroundPlaneConfig;
   isLoading?: boolean;
   loadingMessage?: string;
+  viewStorageKey?: string;
 };
 
 export type GroundPlaneConfig = {
@@ -73,6 +74,12 @@ type PreviewTheme = {
   groundPlaneOutline: string;
 };
 
+type StoredPreviewView = {
+  cameraPosition: [number, number, number];
+  target: [number, number, number];
+  up: [number, number, number];
+};
+
 const orientationDirections: Record<OrientationView, Vector3> = {
   home: new Vector3(-1.1, -1.25, 0.85).normalize(),
   top: new Vector3(0, 0, 1),
@@ -104,6 +111,61 @@ function getPreviewTheme(element: HTMLElement): PreviewTheme {
     groundPlane: read("--viewer-ground-plane", "#94a3b8"),
     groundPlaneOutline: read("--viewer-ground-plane-outline", "#516070"),
   };
+}
+
+function isFiniteVectorTuple(value: unknown): value is [number, number, number] {
+  return (
+    Array.isArray(value) &&
+    value.length === 3 &&
+    value.every((item) => typeof item === "number" && Number.isFinite(item))
+  );
+}
+
+function readStoredPreviewView(storageKey: string | undefined) {
+  if (!storageKey || typeof window === "undefined") {
+    return null;
+  }
+
+  const storedView = window.localStorage.getItem(storageKey);
+
+  if (!storedView) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(storedView) as Partial<StoredPreviewView>;
+
+    if (
+      isFiniteVectorTuple(parsed.cameraPosition) &&
+      isFiniteVectorTuple(parsed.target) &&
+      isFiniteVectorTuple(parsed.up)
+    ) {
+      return parsed as StoredPreviewView;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function writeStoredPreviewView(
+  storageKey: string | undefined,
+  camera: PerspectiveCamera,
+  controls: OrbitControls,
+) {
+  if (!storageKey) {
+    return;
+  }
+
+  window.localStorage.setItem(
+    storageKey,
+    JSON.stringify({
+      cameraPosition: camera.position.toArray(),
+      target: controls.target.toArray(),
+      up: camera.up.toArray(),
+    }),
+  );
 }
 
 function createLabelTexture(text: string, background: string, theme: PreviewTheme) {
@@ -353,6 +415,7 @@ export function OpenScadPreview({
   groundPlane,
   isLoading = false,
   loadingMessage,
+  viewStorageKey,
 }: OpenScadPreviewProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const orientationHostRef = useRef<HTMLDivElement>(null);
@@ -365,6 +428,7 @@ export function OpenScadPreview({
   const modelCenterRef = useRef(new Vector3(0, 0, 16));
   const modelRadiusRef = useRef(96);
   const hasSetInitialViewRef = useRef(false);
+  const storedViewRef = useRef(readStoredPreviewView(viewStorageKey));
   const themeRef = useRef<PreviewTheme | null>(null);
   const [viewerError, setViewerError] = useState<{
     stl: Uint8Array;
@@ -391,7 +455,8 @@ export function OpenScadPreview({
 
     controls.target.copy(center);
     controls.update();
-  }, []);
+    writeStoredPreviewView(viewStorageKey, camera, controls);
+  }, [viewStorageKey]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -428,6 +493,10 @@ export function OpenScadPreview({
     controls.enableDamping = true;
     controls.target.set(0, 0, 14);
     controlsRef.current = controls;
+    const persistView = () => {
+      writeStoredPreviewView(viewStorageKey, camera, controls);
+    };
+    controls.addEventListener("end", persistView);
 
     scene.add(new AmbientLight(0xffffff, 0.7));
     const keyLight = new DirectionalLight(theme.keyLight, 1.7);
@@ -584,6 +653,7 @@ export function OpenScadPreview({
       cancelAnimationFrame(frame);
       observer.disconnect();
       themeObserver.disconnect();
+      controls.removeEventListener("end", persistView);
       controls.dispose();
       renderer.dispose();
       orientationRenderer.dispose();
@@ -598,7 +668,7 @@ export function OpenScadPreview({
       groundPlaneRef.current = null;
       modelBoundsRef.current = null;
     };
-  }, [snapToView]);
+  }, [snapToView, viewStorageKey]);
 
   useEffect(() => {
     const scene = sceneRef.current;
@@ -652,7 +722,17 @@ export function OpenScadPreview({
     scene.add(model);
 
     if (!hasSetInitialViewRef.current) {
-      snapToView("home");
+      const storedView = storedViewRef.current;
+
+      if (storedView && cameraRef.current && controlsRef.current) {
+        cameraRef.current.position.fromArray(storedView.cameraPosition);
+        cameraRef.current.up.fromArray(storedView.up);
+        controlsRef.current.target.fromArray(storedView.target);
+        controlsRef.current.update();
+      } else {
+        snapToView("home");
+      }
+
       hasSetInitialViewRef.current = true;
     }
 
