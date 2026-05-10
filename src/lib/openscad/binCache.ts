@@ -1,5 +1,7 @@
 import {
   createBinDefines,
+  normalizeBinExtraDefines,
+  type OpenScadDefineValue,
   type GridfinityBinParameters,
 } from "./gridfinityExtended";
 
@@ -13,6 +15,8 @@ export type CanonicalGridfinityBinSettings = {
 export function createCanonicalBinSettings(
   params: GridfinityBinParameters,
 ): CanonicalGridfinityBinSettings {
+  const extraDefines = normalizeBinExtraDefines(params.extraDefines);
+
   return {
     params: {
       widthUnits: params.widthUnits,
@@ -29,9 +33,30 @@ export function createCanonicalBinSettings(
       flatBase: params.flatBase,
       filledIn: params.filledIn,
       wallThicknessMm: params.wallThicknessMm,
+      extraDefines,
     },
-    defines: createBinDefines(params),
+    defines: createBinDefines({ ...params, extraDefines }),
   };
+}
+
+function isOpenScadDefineValue(value: unknown): value is OpenScadDefineValue {
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return typeof value !== "number" || Number.isFinite(value);
+  }
+
+  return Array.isArray(value) && value.every(isOpenScadDefineValue);
+}
+
+function isExtraDefines(value: unknown): value is GridfinityBinParameters["extraDefines"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  return Object.values(value).every(isOpenScadDefineValue);
 }
 
 export function isGridfinityBinParameters(value: unknown): value is GridfinityBinParameters {
@@ -49,14 +74,21 @@ export function isGridfinityBinParameters(value: unknown): value is GridfinityBi
     typeof params.wallThicknessMm === "number" &&
     (params.lipStyle === "normal" ||
       params.lipStyle === "reduced" ||
+      params.lipStyle === "reduced_double" ||
       params.lipStyle === "minimum" ||
       params.lipStyle === "none") &&
     (params.labelStyle === "disabled" ||
       params.labelStyle === "normal" ||
-      params.labelStyle === "gflabel") &&
+      params.labelStyle === "gflabel" ||
+      params.labelStyle === "pred" ||
+      params.labelStyle === "cullenect" ||
+      params.labelStyle === "cullenect_legacy") &&
     (params.labelPosition === "left" ||
       params.labelPosition === "center" ||
-      params.labelPosition === "right") &&
+      params.labelPosition === "right" ||
+      params.labelPosition === "leftchamber" ||
+      params.labelPosition === "centerchamber" ||
+      params.labelPosition === "rightchamber") &&
     (params.fingerslide === "none" ||
       params.fingerslide === "rounded" ||
       params.fingerslide === "chamfered") &&
@@ -65,6 +97,7 @@ export function isGridfinityBinParameters(value: unknown): value is GridfinityBi
     (params.flatBase === "off" ||
       params.flatBase === "gridfinity" ||
       params.flatBase === "rounded") &&
-    typeof params.filledIn === "boolean"
+    typeof params.filledIn === "boolean" &&
+    isExtraDefines(params.extraDefines)
   );
 }

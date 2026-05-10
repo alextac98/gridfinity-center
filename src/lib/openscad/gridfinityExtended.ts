@@ -76,26 +76,41 @@ export type OpenScadDefineValue =
   | boolean
   | readonly OpenScadDefineValue[];
 
+export type GridfinityBinExtraDefines = Record<string, OpenScadDefineValue>;
+
 export type GridfinityBinParameters = {
   widthUnits: number;
   depthUnits: number;
   heightUnits: number;
   verticalChambers: number;
   horizontalChambers: number;
-  lipStyle: "normal" | "reduced" | "minimum" | "none";
-  labelStyle: "disabled" | "normal" | "gflabel";
-  labelPosition: "left" | "center" | "right";
+  lipStyle: "normal" | "reduced" | "reduced_double" | "minimum" | "none";
+  labelStyle: "disabled" | "normal" | "gflabel" | "pred" | "cullenect" | "cullenect_legacy";
+  labelPosition: "left" | "center" | "right" | "leftchamber" | "centerchamber" | "rightchamber";
   fingerslide: "none" | "rounded" | "chamfered";
   magnets: boolean;
   screws: boolean;
   flatBase: "off" | "gridfinity" | "rounded";
   filledIn: boolean;
   wallThicknessMm: number;
+  extraDefines: GridfinityBinExtraDefines;
 };
 
+export function getMinimumWallThicknessMm(heightUnits: number) {
+  if (heightUnits < 6) {
+    return 0.95;
+  }
+
+  if (heightUnits < 12) {
+    return 1.2;
+  }
+
+  return 1.6;
+}
+
 export const defaultGridfinityBinParameters: GridfinityBinParameters = {
-  widthUnits: 2,
-  depthUnits: 1,
+  widthUnits: 1,
+  depthUnits: 2,
   heightUnits: 3,
   verticalChambers: 1,
   horizontalChambers: 1,
@@ -107,7 +122,112 @@ export const defaultGridfinityBinParameters: GridfinityBinParameters = {
   screws: false,
   flatBase: "off",
   filledIn: false,
-  wallThicknessMm: 0,
+  wallThicknessMm: getMinimumWallThicknessMm(3),
+  extraDefines: {
+    headroom: 0.8,
+    lip_side_relief_trigger: [1, 1],
+    lip_top_relief_height: -1,
+    lip_top_relief_width: -1,
+    lip_top_notches: true,
+    lip_clip_position: "disabled",
+    lip_non_blocking: false,
+    height_includes_lip: false,
+    chamber_wall_thickness: [getMinimumWallThicknessMm(3), getMinimumWallThicknessMm(3)],
+    chamber_wall_headroom: 0,
+    chamber_wall_top_radius: 0,
+    vertical_separator_bend_separation: 0,
+    vertical_separator_bend_angle: 45,
+    vertical_separator_bend_position: 0,
+    vertical_separator_cut_depth: 0,
+    horizontal_separator_bend_separation: 0,
+    horizontal_separator_bend_angle: 45,
+    horizontal_separator_bend_position: 0,
+    horizontal_separator_cut_depth: 0,
+    vertical_irregular_subdivisions: false,
+    vertical_separator_config: "10.5|21|42|50|60",
+    horizontal_irregular_subdivisions: false,
+    horizontal_separator_config: "10.5|21|42|50|60",
+    magnet_size: [6.5, 2.4],
+    magnet_easy_release: "auto",
+    magnet_side_access: "disabled",
+    magnet_captive_height: 0,
+    magnet_crush_depth: 0,
+    magnet_chamfer: 0,
+    screw_size: [3, 6],
+    center_magnet_size: [0, 0],
+    hole_overhang_remedy: 2,
+    box_corner_attachments_only: "enabled",
+    floor_thickness: 0.7,
+    cavity_floor_radius: -1,
+    efficient_floor: "off",
+    sub_pitch: 1,
+    spacer: false,
+    minimum_printable_pad_size: 0.2,
+    flat_base_rounded_radius: -1,
+    flat_base_rounded_easyPrint: -1,
+    align_grid_x: "near",
+    align_grid_y: "near",
+    label_dividers: "disabled",
+    label_size: [0, 14, 0, 0.6],
+    label_relief: [0, 0, 0, 0.6],
+    label_walls: [0, 1, 0, 0],
+    sliding_lid_enabled: false,
+    sliding_lid_thickness: 0,
+    sliding_lid_min_wall_thickness: 0,
+    sliding_lid_min_support: 0,
+    sliding_lid_clearance: 0.1,
+    sliding_lid_pull_style: "disabled",
+    sliding_lid_nub_size: 0.5,
+    fingerslide_radius: 7,
+    fingerslide_walls: [1, 0, 0, 0],
+    fingerslide_lip_aligned: true,
+    tapered_corner: "none",
+    tapered_corner_size: 10,
+    tapered_setback: -1,
+    wallpattern_enabled: false,
+    wallpattern_style: "hexgrid",
+    wallpattern_strength: 2,
+    wallpattern_walls: [1, 1, 1, 1],
+    wallpattern_rotate_grid: false,
+    wallpattern_cell_size: [10, 10],
+    wallpattern_dividers_enabled: "disabled",
+    wallpattern_hole_sides: 6,
+    wallpattern_hole_radius: 0.5,
+    wallpattern_fill: "none",
+    wallpattern_border: 0,
+    wallpattern_depth: 0,
+    wallpattern_pattern_grid_chamfer: 0,
+    wallpattern_pattern_voronoi_noise: 0.75,
+    wallpattern_pattern_brick_weight: 5,
+    wallpattern_pattern_quality: 0.4,
+    wallpattern_colored: "disabled",
+    floorpattern_enabled: false,
+    floorpattern_style: "hexgrid",
+    floorpattern_strength: 2,
+    floorpattern_rotate_grid: false,
+    floorpattern_cell_size: [10, 10],
+    floorpattern_hole_sides: 6,
+    floorpattern_hole_radius: 0.5,
+    floorpattern_fill: "crop",
+    floorpattern_border: 0,
+    floorpattern_depth: 0,
+    floorpattern_pattern_grid_chamfer: 0,
+    floorpattern_pattern_voronoi_noise: 0.75,
+    floorpattern_pattern_brick_weight: 5,
+    floorpattern_pattern_quality: 0.4,
+    wallcutout_vertical: "disabled",
+    wallcutout_vertical_position: [-2, -0.5, -0.5, -0.5],
+    wallcutout_vertical_width: 0,
+    wallcutout_vertical_angle: 70,
+    wallcutout_vertical_height: 0,
+    wallcutout_vertical_corner_radius: 5,
+    wallcutout_horizontal: "disabled",
+    wallcutout_horizontal_position: [-2, -0.5, -0.5, -0.5],
+    wallcutout_horizontal_width: 0,
+    wallcutout_horizontal_angle: 70,
+    wallcutout_horizontal_height: 0,
+    wallcutout_horizontal_corner_radius: 5,
+  },
 };
 
 export function formatScadValue(value: OpenScadDefineValue): string {
@@ -126,8 +246,58 @@ export function formatScadValue(value: OpenScadDefineValue): string {
   return JSON.stringify(value);
 }
 
-export function createBinDefines(params: GridfinityBinParameters) {
+function toBooleanNumberTuple(
+  value: OpenScadDefineValue | undefined,
+  fallback: readonly number[],
+) {
+  if (!Array.isArray(value)) {
+    return fallback;
+  }
+
+  return value.map((item) => {
+    if (typeof item === "number") {
+      return item === 0 ? 0 : 1;
+    }
+
+    return item === true ? 1 : 0;
+  });
+}
+
+function toFingerSlideWallsTuple(
+  value: OpenScadDefineValue | undefined,
+  fallback: readonly number[],
+) {
+  if (!Array.isArray(value)) {
+    return fallback;
+  }
+
+  return value.map((item) => {
+    if (typeof item === "number" && Number.isFinite(item)) {
+      return item;
+    }
+
+    return item === true ? 1 : 0;
+  });
+}
+
+export function normalizeBinExtraDefines(
+  extraDefines: GridfinityBinExtraDefines,
+): GridfinityBinExtraDefines {
   return {
+    ...extraDefines,
+    fingerslide_walls: toFingerSlideWallsTuple(
+      extraDefines.fingerslide_walls,
+      [1, 0, 0, 0],
+    ),
+    label_walls: toBooleanNumberTuple(extraDefines.label_walls, [0, 1, 0, 0]),
+  };
+}
+
+export function createBinDefines(params: GridfinityBinParameters) {
+  const extraDefines = normalizeBinExtraDefines(params.extraDefines);
+
+  return {
+    ...extraDefines,
     width: [params.widthUnits, 0],
     depth: [params.depthUnits, 0],
     height: [params.heightUnits, 0],

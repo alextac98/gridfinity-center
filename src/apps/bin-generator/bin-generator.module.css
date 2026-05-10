@@ -1,27 +1,30 @@
 .appFrame {
-  display: grid;
-  grid-template-columns: minmax(240px, 300px) minmax(420px, 1fr) minmax(260px, 320px);
-  flex: 1;
-  gap: 14px;
-  margin-top: 16px;
-  min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(240px, 300px) minmax(420px, 1fr) minmax(
+            260px,
+            320px
+        );
+    flex: 1;
+    gap: 14px;
+    margin-top: 16px;
+    min-height: 0;
 }
 
 .panel,
 .preview {
-  min-width: 0;
-  min-height: 0;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
+    min-width: 0;
+    min-height: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
 }
 
 .panel {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding: 16px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 16px;
 }
 
 .panelHeader,
@@ -31,355 +34,593 @@
 .generateButton,
 .resetIconButton,
 .outputActions button {
-  display: flex;
-  align-items: center;
+    display: flex;
+    align-items: center;
 }
 
 .panelHeader {
-  gap: 9px;
-  min-height: 34px;
-  color: var(--panel-heading);
+    gap: 9px;
+    min-height: 34px;
+    color: var(--panel-heading);
 }
 
 .panelHeader h2,
 .previewToolbar span {
-  font-size: 15px;
-  font-weight: 760;
+    font-size: 15px;
+    font-weight: 760;
 }
 
 .panelScroll {
-  flex: 1;
-  min-height: 0;
-  margin-top: 22px;
-  overflow: auto;
+    flex: 1;
+    min-height: 0;
+    margin-top: 22px;
+    margin-right: -12px;
+    overflow: auto;
+    padding-right: 12px;
+    scrollbar-gutter: stable;
+    scrollbar-color: color-mix(in srgb, var(--muted) 62%, transparent)
+        var(--surface);
+    scrollbar-width: thin;
+}
+
+.panelScroll::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+.panelScroll::-webkit-scrollbar-track {
+    border-radius: 999px;
+    background: var(--surface);
+}
+
+.panelScroll::-webkit-scrollbar-thumb {
+    border: 2px solid var(--surface);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--muted) 62%, transparent);
+}
+
+.panelScroll::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--muted) 82%, transparent);
 }
 
 .panelActions {
-  flex: 0 0 auto;
-  margin-top: 12px;
-  border-top: 1px solid var(--border);
-  padding-top: 12px;
-  background: var(--surface);
+    flex: 0 0 auto;
+    margin-top: 12px;
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+    background: var(--surface);
 }
 
 .formShell {
-  display: grid;
-  gap: 13px;
-  padding-bottom: 4px;
+    display: grid;
+    gap: 18px;
+    padding-bottom: 4px;
+}
+
+.formSection {
+    display: grid;
+    gap: 12px;
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+}
+
+.formSectionCollapsed {
+    gap: 0;
+}
+
+.formSection:first-child {
+    border-top: 0;
+    padding-top: 0;
+}
+
+.sectionToggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    min-height: 30px;
+    border: 0;
+    border-radius: 8px;
+    padding: 0 4px;
+    background: transparent;
+    color: var(--panel-heading);
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+}
+
+.sectionToggle:hover {
+    background: color-mix(in srgb, var(--brand-accent) 8%, transparent);
+}
+
+.sectionToggle:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--brand-accent) 56%, transparent);
+    outline-offset: 2px;
+}
+
+.sectionToggle h3 {
+    margin: 0;
+    color: var(--panel-heading);
+    font-size: 13px;
+    font-weight: 780;
+}
+
+.sectionToggle svg {
+    flex: 0 0 auto;
+    color: var(--muted);
+    transition: transform 150ms ease;
+}
+
+.sectionChevronCollapsed {
+    transform: rotate(180deg);
+}
+
+.sectionFields {
+    display: grid;
+    gap: 13px;
+    padding: 2px;
+}
+
+.twoColumnFields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .loadingPanel,
 .previewLoading {
-  display: grid;
-  place-items: center;
-  min-height: 160px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  margin-top: 22px;
-  background: var(--field);
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 760;
+    display: grid;
+    place-items: center;
+    min-height: 160px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-top: 22px;
+    background: var(--field);
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 760;
 }
 
 .previewLoading {
-  flex: 1;
-  min-height: 340px;
-  margin-top: 0;
-  border: 0;
-  border-radius: 0;
-  background: var(--viewer-bg);
+    flex: 1;
+    min-height: 340px;
+    margin-top: 0;
+    border: 0;
+    border-radius: 0;
+    background: var(--viewer-bg);
 }
 
 .field {
-  display: grid;
-  gap: 8px;
+    display: grid;
+    gap: 8px;
+}
+
+.fieldDisabled {
+    opacity: 0.48;
+}
+
+.booleanControl {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 40px;
+    max-height: 40px;
+    border: 1px solid var(--border-strong);
+  border-radius: 6px;
+    padding: 7px 10px;
+    background: var(--field);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 720;
+}
+
+.booleanControl input {
+    position: relative;
+    display: grid;
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+    place-items: center;
+    border: 1px solid var(--border-strong);
+    border-radius: 1px;
+    appearance: none;
+    background: var(--surface);
+    color: var(--accent-button-text);
+    cursor: pointer;
+}
+
+.fieldDisabled input,
+.fieldDisabled select,
+.fieldDisabled .booleanControl,
+.fieldDisabled .booleanControl input {
+    cursor: not-allowed;
+}
+
+.fieldDisabled input,
+.fieldDisabled select,
+.fieldDisabled .booleanControl {
+    background: color-mix(in srgb, var(--field) 78%, var(--surface));
+}
+
+.booleanControl input::after {
+    width: 6px;
+    height: 3px;
+    border-bottom: 2px solid currentColor;
+    border-left: 2px solid currentColor;
+    content: "";
+    opacity: 0;
+    transform: rotate(-45deg) translate(1px, -1px);
+}
+
+.booleanControl input:checked {
+    border-color: var(--brand-accent);
+    background: var(--brand-accent);
+}
+
+.booleanControl input:checked::after {
+    opacity: 1;
+}
+
+.booleanControl input:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--brand-accent) 56%, transparent);
+    outline-offset: 2px;
+}
+
+.booleanControl strong {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 650;
 }
 
 .field span {
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 680;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 680;
 }
 
 .field input,
 .field select {
-  width: 100%;
-  min-height: 40px;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  padding: 0 11px;
-  background: var(--field);
-  color: var(--text);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 650;
-  color-scheme: light dark;
+    width: 100%;
+    min-height: 40px;
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    outline: 0;
+    padding: 0 11px;
+    background: var(--field);
+    color: var(--text);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 650;
+    color-scheme: light dark;
+}
+
+.field .booleanControl input {
+    width: 18px;
+    min-width: 18px;
+    max-width: 18px;
+    height: 18px;
+    min-height: 18px;
+    max-height: 18px;
+    flex: 0 0 18px;
+    padding: 0;
+}
+
+.field input:focus-visible,
+.field select:focus-visible {
+    border-color: var(--brand-accent);
+    box-shadow: 0 0 0 2px
+        color-mix(in srgb, var(--brand-accent) 42%, transparent);
 }
 
 .field input::placeholder {
-  color: var(--muted);
+    color: var(--muted);
+}
+
+.field input[type="number"] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+}
+
+.field input[type="number"]::-webkit-inner-spin-button,
+.field input[type="number"]::-webkit-outer-spin-button {
+    margin: 0;
+    appearance: none;
+    -webkit-appearance: none;
 }
 
 .field select option {
-  background: var(--surface);
-  color: var(--text);
+    background: var(--surface);
+    color: var(--text);
 }
 
 .inputWrap {
-  position: relative;
+    position: relative;
 }
 
 .inputWrap input {
-  padding-right: 42px;
+    padding-right: 74px;
 }
 
 .inputWrap small {
-  position: absolute;
-  top: 50%;
-  right: 11px;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 760;
-  transform: translateY(-50%);
+    position: absolute;
+    top: 50%;
+    right: 11px;
+    max-width: 58px;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 760;
+    text-overflow: ellipsis;
+    transform: translateY(-50%);
+    white-space: nowrap;
 }
 
-.switchGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+.tupleField {
+    grid-column: 1 / -1;
 }
 
-.switchGrid label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 38px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0 10px;
-  background: var(--field);
-  color: var(--text-soft);
-  font-size: 13px;
-  font-weight: 720;
+.fullWidthField {
+    grid-column: 1 / -1;
 }
 
-.switchGrid input {
-  accent-color: var(--brand-accent);
+.tupleGrid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.tupleItem {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+}
+
+.field .tupleSubLabel {
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 720;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tupleGrid .inputWrap input {
+    padding-right: 48px;
+}
+
+.sideOverrideGrid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 10px;
+}
+
+.sideOverrideItem {
+    display: grid;
+    align-content: start;
+    gap: 10px;
+    min-width: 0;
+}
+
+.booleanControl:hover {
+    border-color: color-mix(
+        in srgb,
+        var(--brand-accent) 38%,
+        var(--border-strong)
+    );
 }
 
 .generateButton,
 .resetIconButton,
 .outputActions button {
-  justify-content: center;
-  gap: 8px;
-  min-height: 38px;
-  border: 0;
-  border-radius: 8px;
-  padding: 0 12px;
-  background: var(--button-solid);
-  color: var(--button-solid-text);
-  cursor: pointer;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 740;
+    justify-content: center;
+    gap: 8px;
+    min-height: 38px;
+    border: 0;
+    border-radius: 8px;
+    padding: 0 12px;
+    background: var(--button-solid);
+    color: var(--button-solid-text);
+    cursor: pointer;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 740;
 }
 
 .actionRow {
-  gap: 8px;
+    gap: 8px;
 }
 
 .generateButton {
-  flex: 1;
-  border: 1px solid color-mix(in srgb, var(--brand-accent) 24%, transparent);
-  background: var(--brand-accent);
-  color: var(--accent-button-text);
+    flex: 1;
+    border: 1px solid color-mix(in srgb, var(--brand-accent) 24%, transparent);
+    background: var(--brand-accent);
+    color: var(--accent-button-text);
 }
 
 .resetIconButton {
-  flex: 0 0 38px;
-  width: 38px;
-  padding: 0;
-  border: 1px solid color-mix(in srgb, var(--brand-accent) 24%, transparent);
-  background: color-mix(in srgb, var(--brand-accent) 13%, var(--surface));
-  color: var(--text);
+    flex: 0 0 38px;
+    width: 38px;
+    padding: 0;
+    border: 1px solid color-mix(in srgb, var(--brand-accent) 24%, transparent);
+    background: color-mix(in srgb, var(--brand-accent) 13%, var(--surface));
+    color: var(--text);
 }
 
 .generateButton:disabled,
 .resetIconButton:disabled {
-  cursor: not-allowed;
-  opacity: 0.52;
+    cursor: not-allowed;
+    opacity: 0.52;
 }
 
 .preview {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 .previewToolbar {
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 58px;
-  border-bottom: 1px solid var(--border);
-  padding: 0 16px;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 58px;
+    border-bottom: 1px solid var(--border);
+    padding: 0 16px;
 }
 
 .toolbarStatus {
-  gap: 8px;
-  min-height: 34px;
-  max-width: min(420px, 55%);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0 10px;
-  background: var(--field);
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 760;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+    gap: 8px;
+    min-height: 34px;
+    max-width: min(420px, 55%);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0 10px;
+    background: var(--field);
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 760;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .outputList {
-  display: grid;
-  gap: 12px;
-  padding-bottom: 4px;
+    display: grid;
+    gap: 12px;
+    padding-bottom: 4px;
 }
 
 .outputList div {
-  display: grid;
-  gap: 7px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px;
-  background: var(--field);
+    display: grid;
+    gap: 7px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    background: var(--field);
 }
 
 .outputList span {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 760;
-  text-transform: uppercase;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 760;
+    text-transform: uppercase;
 }
 
 .outputList strong {
-  color: var(--output-strong);
-  font-size: 14px;
-  line-height: 1.35;
+    color: var(--output-strong);
+    font-size: 14px;
+    line-height: 1.35;
 }
 
 .outputActions {
-  position: relative;
+    position: relative;
 }
 
 .outputActions button {
-  width: 100%;
+    width: 100%;
 }
 
 .outputActions button:disabled,
 .outputActions button[aria-disabled="true"] {
-  cursor: not-allowed;
-  color: var(--muted);
-  background: color-mix(in srgb, var(--field) 82%, var(--surface));
+    cursor: not-allowed;
+    color: var(--muted);
+    background: color-mix(in srgb, var(--field) 82%, var(--surface));
 }
 
 .splitAction {
-  display: flex;
-  gap: 8px;
+    display: flex;
+    gap: 8px;
 }
 
 .outputActions .primaryOutputButton {
-  flex: 1;
-  min-width: 0;
-  border: 1px solid color-mix(in srgb, var(--brand-accent) 24%, transparent);
-  background: var(--brand-accent);
-  color: var(--accent-button-text);
+    flex: 1;
+    min-width: 0;
+    border: 1px solid color-mix(in srgb, var(--brand-accent) 24%, transparent);
+    background: var(--brand-accent);
+    color: var(--accent-button-text);
 }
 
 .outputActions .outputMenuButton {
-  flex: 0 0 42px;
-  width: 42px;
-  padding: 0;
-  border: 1px solid color-mix(in srgb, var(--brand-accent) 24%, transparent);
-  background: color-mix(in srgb, var(--brand-accent) 13%, var(--surface));
-  color: var(--text);
+    flex: 0 0 42px;
+    width: 42px;
+    padding: 0;
+    border: 1px solid color-mix(in srgb, var(--brand-accent) 24%, transparent);
+    background: color-mix(in srgb, var(--brand-accent) 13%, var(--surface));
+    color: var(--text);
 }
 
 .outputMenu {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 8px);
-  left: 0;
-  z-index: 10;
-  display: grid;
-  gap: 4px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 6px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 8px);
+    left: 0;
+    z-index: 10;
+    display: grid;
+    gap: 4px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
 }
 
 .outputMenu button {
-  justify-content: flex-start;
-  min-height: 36px;
-  border: 0;
-  background: var(--field);
-  color: var(--text);
-  font-size: 13px;
+    justify-content: flex-start;
+    min-height: 36px;
+    border: 0;
+    background: var(--field);
+    color: var(--text);
+    font-size: 13px;
 }
 
 .outputMenu button[aria-checked="true"] {
-  background: color-mix(in srgb, var(--brand-accent) 18%, var(--field));
-  color: var(--text);
+    background: color-mix(in srgb, var(--brand-accent) 18%, var(--field));
+    color: var(--text);
 }
 
 .slicerIcon {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 18px;
-  border-radius: 4px;
-  background-color: #fff;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: cover;
-  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 12%);
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+  border-radius: 2px;
+    background-color: #fff;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 12%);
 }
 
 .prusaSlicerIcon {
-  background-image: url("/slicer-icons/prusaslicer.png");
+    background-image: url("/slicer-icons/prusaslicer.png");
 }
 
 .orcaSlicerIcon {
-  background-image: url("/slicer-icons/orcaslicer.png");
+    background-image: url("/slicer-icons/orcaslicer.png");
 }
 
 .bambuStudioIcon {
-  background-image: url("/slicer-icons/bambu-studio.png");
+    background-image: url("/slicer-icons/bambu-studio.png");
 }
 
 @media (max-width: 1180px) {
-  .appFrame {
-    grid-template-columns: 1fr 1fr;
-  }
+    .appFrame {
+        grid-template-columns: 1fr 1fr;
+    }
 
-  .preview {
-    grid-column: 1 / -1;
-    grid-row: 1;
-  }
+    .preview {
+        grid-column: 1 / -1;
+        grid-row: 1;
+    }
 }
 
 @media (max-width: 760px) {
-  .appFrame {
-    grid-template-columns: 1fr;
-    flex: 1;
-    overflow: auto;
-  }
+    .appFrame {
+        grid-template-columns: 1fr;
+        flex: 1;
+        overflow: auto;
+    }
 
-  .preview {
-    grid-column: auto;
-    grid-row: auto;
-    min-height: 360px;
-  }
+    .preview {
+        grid-column: auto;
+        grid-row: auto;
+        min-height: 360px;
+    }
 }
