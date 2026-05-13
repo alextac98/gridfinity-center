@@ -15,6 +15,7 @@
     "lucide-react": "^1.14.0",
     "next": "16.2.4",
     "openscad-wasm": "^0.0.4",
+    "posthog-js": "^1.373.2",
     "qrcode": "^1.5.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",

@@ -2,6 +2,7 @@
 
 import { PanelLeft, SlidersHorizontal } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { captureEvent } from "@/lib/analytics/posthog";
 import {
   createBinDefines,
   createBinScadSnippet,
@@ -273,6 +274,7 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
     const defaultParams = cloneDefaultBinParameters();
     const defaultDraft = createDraftFromParams(defaultParams);
 
+    captureEvent("bin_model_reset");
     model.clearRenderError();
     model.clearGeneratedModel();
     model.markCheckingCache();
@@ -324,6 +326,18 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
           setDraft={setDraft}
           clearRenderError={model.clearRenderError}
           onGenerate={() => {
+            captureEvent("bin_model_generate_requested", {
+              width_units: params.widthUnits,
+              depth_units: params.depthUnits,
+              height_units: params.heightUnits,
+              vertical_chambers: params.verticalChambers,
+              horizontal_chambers: params.horizontalChambers,
+              lip_style: params.lipStyle,
+              label_style: params.labelStyle,
+              magnets: params.magnets,
+              screws: params.screws,
+              filled_in: params.filledIn,
+            });
             void model.requestRender(params);
           }}
           onReset={reset}

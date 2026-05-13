@@ -13,6 +13,7 @@ import {
 import QRCode from "qrcode";
 import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { ComboboxInput } from "@/components/ui/ComboboxInput";
+import { captureEvent } from "@/lib/analytics/posthog";
 import type { GridfinityAppProps } from "../types";
 import styles from "./label-generator.module.css";
 
@@ -1285,6 +1286,12 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
       context.drawImage(image, qrX, padding, qrSize, qrSize);
     }
 
+    captureEvent("label_exported", {
+      label_size: labelSize.id,
+      label_width_mm: labelSize.widthMm,
+      label_height_mm: labelSize.heightMm,
+      format: "png",
+    });
     const link = document.createElement("a");
     link.download = `gridfinity-label-${labelSize.id}-${trimmedThreadSize.toLowerCase() || "custom"}.png`;
     link.href = canvas.toDataURL("image/png");

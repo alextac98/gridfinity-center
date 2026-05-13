@@ -9,6 +9,7 @@ import {
   Printer,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { captureEvent } from "@/lib/analytics/posthog";
 import { useToast } from "@/shell/ToastProvider";
 import styles from "./generator.module.css";
 
@@ -298,16 +299,29 @@ export function ModelOutputPanel({
     }
 
     if (selectedOutputAction === "download-stl") {
+      captureEvent("model_output_action_performed", {
+        action: "download-stl",
+        model_summary: modelSummary,
+      });
       onDownloadStl();
       return;
     }
 
     if (selectedOutputAction === "download-scad") {
+      captureEvent("model_output_action_performed", {
+        action: "download-scad",
+        model_summary: modelSummary,
+      });
       onDownloadScad();
       return;
     }
 
     if (selectedSlicerLauncher && currentModelUrl) {
+      captureEvent("model_output_action_performed", {
+        action: selectedOutputAction,
+        slicer: selectedSlicerLauncher.label,
+        model_summary: modelSummary,
+      });
       openExternalUrl(selectedSlicerLauncher.createUrl(currentModelUrl));
     }
   };

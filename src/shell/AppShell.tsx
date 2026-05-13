@@ -17,6 +17,7 @@ import type {
   GridfinityReadyStatusTag,
   GridfinityUpcomingStatusTag,
 } from "@/apps/types";
+import { captureEvent } from "@/lib/analytics/posthog";
 import { ToastProvider } from "./ToastProvider";
 import {
   apps,
@@ -166,6 +167,14 @@ export function AppShell() {
   const currentYear = new Date().getFullYear();
 
   const navigateToApp = (appId: RegisteredAppId) => {
+    if (appId === activeAppId) {
+      return;
+    }
+
+    captureEvent("app_navigated", {
+      app_id: appId,
+      from_app_id: activeAppId,
+    });
     setVisitedAppIds((current) =>
       current.includes(appId) ? current : [...current, appId],
     );

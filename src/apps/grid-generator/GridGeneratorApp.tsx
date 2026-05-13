@@ -2,6 +2,7 @@
 
 import { PanelLeft, SlidersHorizontal } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { captureEvent } from "@/lib/analytics/posthog";
 import {
   createBaseplateDefines,
   createBaseplateScadSnippet,
@@ -355,6 +356,7 @@ export function GridGeneratorApp({ accent }: GridfinityAppProps) {
     const defaultParams = cloneDefaultGridParameters();
     const defaultDraft = createDraftFromParams(defaultParams);
 
+    captureEvent("grid_model_reset");
     model.clearRenderError();
     model.clearGeneratedModel();
     model.markCheckingCache();
@@ -406,6 +408,13 @@ export function GridGeneratorApp({ accent }: GridfinityAppProps) {
           setDraft={setDraft}
           clearRenderError={model.clearRenderError}
           onGenerate={() => {
+            captureEvent("grid_model_generate_requested", {
+              width_units: params.widthUnits,
+              depth_units: params.depthUnits,
+              plate_style: params.plateStyle,
+              magnets: params.magnets,
+              build_plate_mode: params.buildPlateMode,
+            });
             void model.requestRender(params);
           }}
           onReset={reset}
