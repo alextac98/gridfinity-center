@@ -53,7 +53,7 @@ type RenderTiming = {
 
 type PreviewTiming = RenderTiming & {
   cacheStatus: string;
-  renderSource: "openscad_render" | "r2_cache";
+  renderSource: "openscad_render" | "native_openscad" | "r2_cache";
   stl: Uint8Array;
 };
 
@@ -115,6 +115,32 @@ async function fetchStlFromUrl(url: string) {
   }
 
   return new Uint8Array(await response.arrayBuffer());
+}
+
+async function renderNativeOpenScad<TParams>(modelId: string, params: TParams) {
+  const response = await fetch(`/api/openscad-models/${modelId}/native-render`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ params }),
+  });
+
+  if (response.status === 503) {
+    return { unavailable: true as const };
+  }
+
+  if (!response.ok) {
+    const details = await response.text().catch(() => "");
+    throw new Error(
+      `Native OpenSCAD render failed with status ${response.status}: ${details}`,
+    );
+  }
+
+  return {
+    unavailable: false as const,
+    stl: new Uint8Array(await response.arrayBuffer()),
+  };
 }
 
 async function uploadStlToR2(uploadUrl: string, stlBytes: Uint8Array) {
@@ -210,7 +236,9 @@ export function useOpenScadModel<TParams>({
   const [hasMounted, setHasMounted] = useState(false);
   const [stl, setStl] = useState<Uint8Array>();
   const [generatedParamsKey, setGeneratedParamsKey] = useState("");
-  const [renderStatus, setRenderStatus] = useState("Preparing OpenSCAD Worker");
+  const [renderStatus, setRenderStatus] = useState(
+    "Preparing browser OpenSCAD WASM worker",
+  );
   const [renderError, setRenderError] = useState("");
   const [isRendering, setIsRendering] = useState(true);
   const [cachedDownloadUrl, setCachedDownloadUrl] = useState("");
@@ -226,6 +254,7 @@ export function useOpenScadModel<TParams>({
   const activeRenderTimingRef = useRef<RenderTiming | null>(null);
   const queuedRenderTimingRef = useRef<RenderTiming | null>(null);
   const previewTimingRef = useRef<PreviewTiming | null>(null);
+  const nativeRendererUnavailableRef = useRef(false);
 
   const currentParamsKey = useMemo(
     () => createParamsKey(params),
@@ -273,7 +302,7 @@ export function useOpenScadModel<TParams>({
       queuedRenderRef.current = false;
       setIsRendering(true);
       setRenderError("");
-      setRenderStatus("Rendering OpenSCAD STL");
+      setRenderStatus("Rendering in browser with OpenSCAD WASM");
 
       const request: OpenScadWorkerRequest = {
         type: "render",
@@ -350,7 +379,7 @@ export function useOpenScadModel<TParams>({
 
       if (!workerRef.current) {
         setIsRendering(false);
-        setRenderStatus("Preparing OpenSCAD Worker");
+        setRenderStatus("Preparing browser OpenSCAD WASM worker");
         return;
       }
 
@@ -360,7 +389,7 @@ export function useOpenScadModel<TParams>({
         queuedRenderTimingRef.current = timing;
         previewTimingRef.current = null;
         setIsRendering(true);
-        setRenderStatus("Rendering Updated OpenSCAD STL");
+        setRenderStatus("Rendering updated model in browser with OpenSCAD WASM");
         return;
       }
 
@@ -370,7 +399,7 @@ export function useOpenScadModel<TParams>({
 
       if (cacheModelId) {
         setIsRendering(true);
-        setRenderStatus("Checking Model Cache");
+        setRenderStatus("Checking shared model cache");
 
         try {
           const cache = await lookupR2Cache(cacheModelId, nextParams);
@@ -388,7 +417,7 @@ export function useOpenScadModel<TParams>({
               objectKey: cache.objectKey,
               settingsHash: cache.settingsHash,
             });
-            setRenderStatus("Loading Cached STL");
+            setRenderStatus("Loading STL from shared model cache");
             const cachedStl = await fetchStlFromUrl(cache.downloadUrl);
             preparePreviewTiming(cachedStl, "r2_cache", "hit");
             setStl(cachedStl);
@@ -416,8 +445,52 @@ export function useOpenScadModel<TParams>({
         }
       }
 
+      if (cacheModelId && !nativeRendererUnavailableRef.current) {
+        setIsRendering(true);
+        setRenderStatus("Rendering with native OpenSCAD");
+
+        try {
+          const nativeRender = await renderNativeOpenScad(cacheModelId, nextParams);
+
+          if (nativeRender.unavailable) {
+            nativeRendererUnavailableRef.current = true;
+          } else {
+            const cache = activeCacheRef.current;
+            const cacheStatus = cache?.enabled ? "miss" : cache ? "disabled" : "none";
+            activeCacheRef.current = null;
+            preparePreviewTiming(nativeRender.stl, "native_openscad", cacheStatus);
+            setStl(nativeRender.stl);
+            setGeneratedParamsKey(nextParamsKey);
+            setRenderStatus("OpenSCAD Preview Ready");
+            setRenderError("");
+            setIsRendering(false);
+
+            if (cache?.enabled && !cache.hit && cache.uploadUrl) {
+              setCachedDownloadUrl("");
+              setCachedDownloadParamsKey("");
+              void cacheGeneratedStl(cacheModelId, cache, nativeRender.stl)
+                .then(() => {
+                  setCachedDownloadUrl(cache.downloadUrl);
+                  setCachedDownloadParamsKey(nextParamsKey);
+                })
+                .catch(() => {
+                  setCachedDownloadUrl("");
+                  setCachedDownloadParamsKey("");
+                });
+            } else {
+              setCachedDownloadUrl("");
+              setCachedDownloadParamsKey("");
+            }
+
+            return;
+          }
+        } catch (error) {
+          console.warn("Native OpenSCAD render failed; rendering in browser.", error);
+        }
+      }
+
       setIsRendering(true);
-      setRenderStatus("Rendering OpenSCAD STL");
+      setRenderStatus("Rendering in browser with OpenSCAD WASM");
       startRender(latestParamsRef.current);
     },
     [
@@ -574,7 +647,7 @@ export function useOpenScadModel<TParams>({
     previewTimingRef.current = null;
   };
 
-  const markCheckingCache = () => setRenderStatus("Checking Model Cache");
+  const markCheckingCache = () => setRenderStatus("Checking shared model cache");
 
   const downloadStl = () => {
     if (!stl || !isPreviewCurrent) {

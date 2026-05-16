@@ -1,9 +1,15 @@
-import { getOpenScadLogs, renderOpenScadToStl } from "./client";
+import {
+  getOpenScadLogs,
+  prewarmOpenScadRuntime,
+  renderOpenScadToStl,
+} from "./client";
 import type { OpenScadWorkerRequest, OpenScadWorkerResponse } from "./workerTypes";
 
 const workerScope = self as unknown as {
   postMessage(message: OpenScadWorkerResponse, transfer?: Transferable[]): void;
 };
+
+void prewarmOpenScadRuntime().catch(() => {});
 
 function toTransferableBuffer(bytes: Uint8Array) {
   const copy = new Uint8Array(bytes.byteLength);

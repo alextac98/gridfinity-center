@@ -1,5 +1,6 @@
 import {
   createBaseplateDefines,
+  createBaseplateScadSnippet,
   type GridfinityBaseplateParameters,
 } from "./gridfinityBaseplate";
 import type { OpenScadCacheModel } from "./modelCache";
@@ -103,8 +104,13 @@ export function isGridfinityBaseplateParameters(
 export const gridfinityBaseplateCacheDefinition = {
   id: "grid-generator",
   cacheModel: gridfinityBaseplateCacheModel,
+  entryFile: "gridfinity_baseplate.scad",
   outputFileName: "gridfinity-baseplate.stl",
   isParameters: isGridfinityBaseplateParameters,
   createCanonicalSettings: (params: unknown) =>
     createCanonicalBaseplateSettings(params as GridfinityBaseplateParameters),
+  createDefines: (params: unknown) =>
+    createBaseplateDefines(params as GridfinityBaseplateParameters),
+  createScadSnippet: (params: unknown) =>
+    createBaseplateScadSnippet(params as GridfinityBaseplateParameters),
 } satisfies OpenScadCacheModel;

@@ -1,0 +1,18 @@
+services:
+  render-service:
+    build:
+      context: ..
+      dockerfile: render-service/Dockerfile
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      RENDER_AUTH_TOKEN: "${RENDER_AUTH_TOKEN:?RENDER_AUTH_TOKEN is required}"
+      RENDER_MAX_CONCURRENCY: "1"
+      RENDER_TIMEOUT_MS: "120000"
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

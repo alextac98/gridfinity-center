@@ -1,5 +1,6 @@
 import {
   createBinDefines,
+  createBinScadSnippet,
   normalizeBinExtraDefines,
   type OpenScadDefineValue,
   type GridfinityBinParameters,
@@ -106,8 +107,13 @@ export function isGridfinityBinParameters(value: unknown): value is GridfinityBi
 export const gridfinityBinCacheDefinition = {
   id: "bin-generator",
   cacheModel: gridfinityBinCacheModel,
+  entryFile: "gridfinity_basic_cup.scad",
   outputFileName: "gridfinity-bin.stl",
   isParameters: isGridfinityBinParameters,
   createCanonicalSettings: (params: unknown) =>
     createCanonicalBinSettings(params as GridfinityBinParameters),
+  createDefines: (params: unknown) =>
+    createBinDefines(params as GridfinityBinParameters),
+  createScadSnippet: (params: unknown) =>
+    createBinScadSnippet(params as GridfinityBinParameters),
 } satisfies OpenScadCacheModel;

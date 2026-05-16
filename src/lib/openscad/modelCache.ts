@@ -1,3 +1,4 @@
+import type { OpenScadDefineValue } from "./defines";
 import { createHash } from "crypto";
 import { gridfinityBaseplateCacheDefinition } from "./baseplateCache";
 import { gridfinityBinCacheDefinition } from "./binCache";
@@ -5,9 +6,12 @@ import { gridfinityBinCacheDefinition } from "./binCache";
 export type OpenScadCacheModel = {
   id: string;
   cacheModel: string;
+  entryFile: string;
   outputFileName: string;
   isParameters: (value: unknown) => boolean;
   createCanonicalSettings: (params: unknown) => unknown;
+  createDefines: (params: unknown) => Record<string, OpenScadDefineValue>;
+  createScadSnippet: (params: unknown) => string;
 };
 
 const cacheModels = [

@@ -34,6 +34,7 @@ type RenderOptions = {
 };
 
 let sourcesPromise: Promise<Record<string, string>> | undefined;
+let preparedRuntimePromise: Promise<OpenScadRuntime> | undefined;
 let openScadLogs: string[] = [];
 
 async function createOpenScadRuntime() {
@@ -100,6 +101,43 @@ async function writeGridfinityExtendedSources(fs: OpenScadFileSystem) {
   }
 }
 
+async function createPreparedOpenScadRuntime() {
+  const openScad = await createOpenScadRuntime();
+  await writeGridfinityExtendedSources(openScad.FS);
+  return openScad;
+}
+
+function createPreparedOpenScadRuntimePromise() {
+  const runtimePromise = createPreparedOpenScadRuntime().catch((error: unknown) => {
+    if (preparedRuntimePromise === runtimePromise) {
+      preparedRuntimePromise = undefined;
+    }
+
+    throw error;
+  });
+
+  return runtimePromise;
+}
+
+function getPreparedOpenScadRuntime() {
+  if (!preparedRuntimePromise) {
+    preparedRuntimePromise = createPreparedOpenScadRuntimePromise();
+  }
+
+  const runtime = preparedRuntimePromise;
+  preparedRuntimePromise = undefined;
+  return runtime;
+}
+
+export function prewarmOpenScadRuntime() {
+  if (preparedRuntimePromise) {
+    return preparedRuntimePromise.then(() => undefined);
+  }
+
+  preparedRuntimePromise = createPreparedOpenScadRuntimePromise();
+  return preparedRuntimePromise.then(() => undefined);
+}
+
 function deleteIfPresent(fs: OpenScadFileSystem, path: string) {
   try {
     fs.unlink(path);
@@ -118,8 +156,7 @@ export async function renderOpenScadToStl({
   outputName = "model.stl",
 }: RenderOptions) {
   openScadLogs = [];
-  const openScad = await createOpenScadRuntime();
-  await writeGridfinityExtendedSources(openScad.FS);
+  const openScad = await getPreparedOpenScadRuntime();
 
   const outputPath = `/${outputName}`;
   deleteIfPresent(openScad.FS, outputPath);
@@ -140,10 +177,12 @@ export async function renderOpenScadToStl({
       outputPath,
     ]);
   } catch (error) {
+    void prewarmOpenScadRuntime().catch(() => {});
     throw createOpenScadError("OpenSCAD crashed while rendering.", error);
   }
 
   if (exitCode !== 0) {
+    void prewarmOpenScadRuntime().catch(() => {});
     throw createOpenScadError(`OpenSCAD exited with code ${exitCode}.`);
   }
 
@@ -152,10 +191,12 @@ export async function renderOpenScadToStl({
   try {
     output = openScad.FS.readFile(outputPath, { encoding: "binary" });
   } catch (error) {
+    void prewarmOpenScadRuntime().catch(() => {});
     throw createOpenScadError("OpenSCAD did not write an STL file.", error);
   }
 
   deleteIfPresent(openScad.FS, outputPath);
+  void prewarmOpenScadRuntime().catch(() => {});
 
   if (typeof output === "string") {
     return new TextEncoder().encode(output);

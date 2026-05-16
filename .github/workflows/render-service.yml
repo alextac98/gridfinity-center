@@ -1,0 +1,118 @@
+name: Render Service
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/render-service.yml"
+      - ".dockerignore"
+      - "public/openscad/**"
+      - "render-service/**"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/render-service.yml"
+      - ".dockerignore"
+      - "public/openscad/**"
+      - "render-service/**"
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/gridfinity-render-service
+
+jobs:
+  build:
+    name: Build render service image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_ref: ${{ steps.image.outputs.image_ref }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set image metadata
+        id: image
+        run: |
+          image_ref="${IMAGE_NAME}:${GITHUB_SHA}"
+          echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
+          echo "IMAGE_REF=${image_ref}" >> "$GITHUB_ENV"
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build image
+        run: |
+          docker build \
+            -f render-service/Dockerfile \
+            -t "${IMAGE_REF}" \
+            -t "${IMAGE_NAME}:latest" \
+            .
+
+      - name: Push commit image
+        if: github.event_name != 'pull_request'
+        run: docker push "${IMAGE_REF}"
+
+      - name: Push latest image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: docker push "${IMAGE_NAME}:latest"
+
+  deploy:
+    name: Deploy render service
+    needs: build
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_dispatch' && 'staging' || 'production' }}
+    permissions:
+      contents: read
+    env:
+      DEPLOY_PATH: ${{ secrets.RENDER_DEPLOY_PATH }}
+      RENDER_AUTH_TOKEN: ${{ secrets.RENDER_AUTH_TOKEN }}
+      RENDER_HOST: ${{ secrets.RENDER_HOST }}
+      RENDER_MAX_CONCURRENCY: ${{ vars.RENDER_MAX_CONCURRENCY || '1' }}
+      RENDER_MAX_QUEUE_LENGTH: ${{ vars.RENDER_MAX_QUEUE_LENGTH || '10' }}
+      RENDER_SERVICE_IMAGE: ${{ needs.build.outputs.image_ref }}
+      RENDER_SSH_KEY: ${{ secrets.RENDER_SSH_KEY }}
+      RENDER_TIMEOUT_MS: ${{ vars.RENDER_TIMEOUT_MS || '120000' }}
+      RENDER_USER: ${{ secrets.RENDER_USER }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Prepare SSH
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$RENDER_SSH_KEY" > ~/.ssh/render_deploy_key
+          chmod 600 ~/.ssh/render_deploy_key
+          ssh-keyscan -H "$RENDER_HOST" >> ~/.ssh/known_hosts
+
+      - name: Prepare deployment files
+        run: |
+          cp render-service/docker-compose.deploy.yml docker-compose.yml
+          cat > render-service.env <<EOF
+          RENDER_SERVICE_IMAGE=${RENDER_SERVICE_IMAGE}
+          RENDER_AUTH_TOKEN=${RENDER_AUTH_TOKEN}
+          RENDER_HOST=${RENDER_HOST}
+          RENDER_MAX_CONCURRENCY=${RENDER_MAX_CONCURRENCY}
+          RENDER_MAX_QUEUE_LENGTH=${RENDER_MAX_QUEUE_LENGTH}
+          RENDER_TIMEOUT_MS=${RENDER_TIMEOUT_MS}
+          EOF
+
+      - name: Upload deployment files
+        run: |
+          ssh -i ~/.ssh/render_deploy_key "$RENDER_USER@$RENDER_HOST" "mkdir -p '$DEPLOY_PATH'"
+          scp -i ~/.ssh/render_deploy_key docker-compose.yml "$RENDER_USER@$RENDER_HOST:$DEPLOY_PATH/docker-compose.yml"
+          scp -i ~/.ssh/render_deploy_key render-service.env "$RENDER_USER@$RENDER_HOST:$DEPLOY_PATH/.env"
+
+      - name: Deploy on VPS
+        run: |
+          ssh -i ~/.ssh/render_deploy_key "$RENDER_USER@$RENDER_HOST" \
+            "cd '$DEPLOY_PATH' \
+              && docker compose pull render-service \
+              && docker compose up -d render-service \
+              && docker image prune -f \
+              && docker compose ps render-service \
+              && docker compose exec -T render-service curl -f http://localhost:8080/healthz"

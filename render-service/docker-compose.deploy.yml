@@ -1,0 +1,26 @@
+services:
+  render-service:
+    image: "${RENDER_SERVICE_IMAGE:?RENDER_SERVICE_IMAGE is required}"
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      RENDER_AUTH_TOKEN: "${RENDER_AUTH_TOKEN:?RENDER_AUTH_TOKEN is required}"
+      RENDER_MAX_CONCURRENCY: "${RENDER_MAX_CONCURRENCY:-1}"
+      RENDER_MAX_QUEUE_LENGTH: "${RENDER_MAX_QUEUE_LENGTH:-10}"
+      RENDER_TIMEOUT_MS: "${RENDER_TIMEOUT_MS:-120000}"
+      OPENSCAD_ENABLE_TEXTMETRICS: "${OPENSCAD_ENABLE_TEXTMETRICS:-1}"
+      VIRTUAL_HOST: "${RENDER_HOST:?RENDER_HOST is required}"
+      VIRTUAL_PORT: "8080"
+      LETSENCRYPT_HOST: "${RENDER_HOST:?RENDER_HOST is required}"
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  default:
+    external: true
+    name: nginx-proxy
