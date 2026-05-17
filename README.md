@@ -93,7 +93,7 @@ The render service is built and deployed by
 - Pull requests build the Docker image but do not push or deploy.
 - Pushes to `main` that touch render-service inputs build, push to GHCR, and
   deploy production.
-- Manual workflow runs build, push to GHCR, and deploy staging from the selected
+- Manual workflow runs build, push to GHCR, and deploy preview from the selected
   branch.
 
 The image is published to:
@@ -103,7 +103,7 @@ ghcr.io/<github-owner>/gridfinity-render-service:<commit-sha>
 ghcr.io/<github-owner>/gridfinity-render-service:latest
 ```
 
-Create GitHub Environments named `staging` and `production`. Add these
+Create GitHub Environments named `Preview` and `Production`. Add these
 environment secrets to each:
 
 ```bash
@@ -113,6 +113,10 @@ RENDER_HOST=            # render service hostname, e.g. render.example.com
 RENDER_SSH_KEY=         # private SSH key for deployment
 RENDER_USER=            # SSH user
 ```
+
+Pushes to `main` deploy with the `Production` environment. Manual workflow runs
+deploy with the `Preview` environment, so both environments need their own
+values before those deploy modes will work.
 
 Optional environment variables:
 

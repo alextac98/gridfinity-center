@@ -65,7 +65,7 @@ jobs:
     needs: build
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    environment: ${{ github.event_name == 'workflow_dispatch' && 'staging' || 'production' }}
+    environment: ${{ github.event_name == 'workflow_dispatch' && 'Preview' || 'Production' }}
     permissions:
       contents: read
     env:
@@ -81,6 +81,17 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Validate deployment configuration
+        run: |
+          missing=0
+          for name in DEPLOY_PATH RENDER_AUTH_TOKEN RENDER_HOST RENDER_SSH_KEY RENDER_USER; do
+            if [ -z "${!name}" ]; then
+              echo "::error title=Missing deployment configuration::${name} is required for the selected GitHub Environment."
+              missing=1
+            fi
+          done
+          exit "$missing"
 
       - name: Prepare SSH
         run: |
