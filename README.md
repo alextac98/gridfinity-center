@@ -145,7 +145,8 @@ starts the service, prunes old images, and checks `/healthz`.
 
 ## R2 Model Cache
 
-The bin generator can use Cloudflare R2 as a shared STL cache. Generated models are stored under a folder derived from the bundled OpenSCAD source fingerprint:
+The generators can use Cloudflare R2 as a shared STL cache. Generated models
+are stored under a folder derived from the bundled OpenSCAD source fingerprint:
 
 ```txt
 models/gridfinity-basic-cup/source-{sourceFingerprint}/{settingsHash}.stl
@@ -160,7 +161,10 @@ R2_SECRET_ACCESS_KEY=
 R2_BUCKET_NAME=
 ```
 
-The browser first tries to upload generated STLs directly to presigned R2 URLs, then falls back to the Next API if browser CORS blocks the direct upload. Configure the R2 bucket CORS policy to allow `GET` and `PUT` from the app origin for the direct upload path.
+The browser does not upload directly to R2. It asks the Next API for a model,
+and the API handles cache lookup, native rendering on cache miss, and R2 upload
+from the server. This avoids user-specific browser or network failures on
+direct R2 `PUT` requests.
 
 ## Initial Product Direction
 

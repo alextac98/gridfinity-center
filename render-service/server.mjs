@@ -71,6 +71,24 @@ function writeJson(response, status, body) {
   response.end(JSON.stringify(body));
 }
 
+function firstHeaderValue(value) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function requestLogDetails(request) {
+  return {
+    forwardedFor: firstHeaderValue(request.headers["x-forwarded-for"]) ?? "",
+    forwardedHost: firstHeaderValue(request.headers["x-forwarded-host"]) ?? "",
+    forwardedProto: firstHeaderValue(request.headers["x-forwarded-proto"]) ?? "",
+    host: request.headers.host ?? "",
+    method: request.method ?? "",
+    origin: request.headers.origin ?? "",
+    referer: request.headers.referer ?? "",
+    url: request.url ?? "",
+    userAgent: request.headers["user-agent"] ?? "",
+  };
+}
+
 function readBody(request) {
   return new Promise((resolve, reject) => {
     let size = 0;
@@ -246,12 +264,25 @@ async function renderOpenScad(request) {
 
 async function handleRender(request, response) {
   if (!authToken) {
+    console.warn(
+      JSON.stringify({
+        event: "render_auth_not_configured",
+        ...requestLogDetails(request),
+      }),
+    );
     writeJson(response, 503, { error: "Render service auth is not configured." });
     return;
   }
 
   const authorization = request.headers.authorization ?? "";
   if (authorization !== `Bearer ${authToken}`) {
+    console.warn(
+      JSON.stringify({
+        authHeaderPresent: Boolean(authorization),
+        event: "render_unauthorized",
+        ...requestLogDetails(request),
+      }),
+    );
     writeJson(response, 401, { error: "Unauthorized." });
     return;
   }

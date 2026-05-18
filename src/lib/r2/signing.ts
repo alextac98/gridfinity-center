@@ -1,6 +1,6 @@
 import { createHmac, createHash } from "crypto";
 
-type R2Config = {
+export type R2Config = {
   accountId: string;
   accessKeyId: string;
   secretAccessKey: string;

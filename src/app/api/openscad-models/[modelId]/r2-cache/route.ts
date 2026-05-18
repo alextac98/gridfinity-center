@@ -107,12 +107,6 @@ export async function POST(request: Request, context: RouteContext) {
     sourceFingerprint,
     settingsHash,
     objectKey,
-    uploadUrl: createPresignedR2Url({
-      config,
-      key: objectKey,
-      method: "PUT",
-      expiresSeconds: 10 * 60,
-    }),
     downloadUrl: createCachedObjectApiUrl(model.id, objectKey),
   });
 }
