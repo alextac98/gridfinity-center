@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
-import { AppShell } from "@/shell/AppShell";
-import { isRegisteredAppId } from "@/shell/appRegistry";
+import { AppShell } from "@/ui/shell/AppShell";
+import { isRegisteredAppId } from "@/ui/shell/appRegistry";
 
 type AppRouteLayoutProps = {
   children: ReactNode;

@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import {
   getOpenScadCacheModel,
   isValidModelObjectKey,
-} from "@/lib/openscad/modelCache";
+} from "@/server/openscad/modelCache";
 import {
   createR2ObjectUrl,
   createSignedR2Headers,
   getR2Config,
-} from "@/lib/r2/signing";
+} from "@/server/r2/signing";
 
 const maxUploadBytes = 25 * 1024 * 1024;
 

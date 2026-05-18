@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { apps, isRegisteredAppId } from "@/shell/appRegistry";
+import { apps, isRegisteredAppId } from "@/ui/shell/appRegistry";
 
 type AppPageProps = {
   params: Promise<{

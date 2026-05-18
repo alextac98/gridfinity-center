@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import {
   getOrCreateOpenScadModel,
   NativeRenderUnavailableError,
-} from "@/lib/openscad/serverModel";
-import { getOpenScadCacheModel } from "@/lib/openscad/modelCache";
+} from "@/server/openscad/serverModel";
+import { getOpenScadCacheModel } from "@/server/openscad/modelCache";
 
 export const runtime = "nodejs";
 

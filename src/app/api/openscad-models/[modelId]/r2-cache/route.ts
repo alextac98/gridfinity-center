@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
-import { getGridfinityExtendedSourceFingerprint } from "@/lib/openscad/sourceFingerprint";
+import { getGridfinityExtendedSourceFingerprint } from "@/server/openscad/sourceFingerprint";
 import {
   createCachedObjectApiUrl,
   getOpenScadCacheModel,
   sha256,
   stableStringify,
-} from "@/lib/openscad/modelCache";
+} from "@/server/openscad/modelCache";
 import {
   createPresignedR2Url,
   getR2Config,
-} from "@/lib/r2/signing";
+} from "@/server/r2/signing";
 
 type CacheRequest = {
   params?: unknown;

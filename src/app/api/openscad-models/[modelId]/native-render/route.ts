@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { getOpenScadCacheModel } from "@/lib/openscad/modelCache";
-import { getGridfinityExtendedSourceFingerprint } from "@/lib/openscad/sourceFingerprint";
+import { getOpenScadCacheModel } from "@/server/openscad/modelCache";
+import { getGridfinityExtendedSourceFingerprint } from "@/server/openscad/sourceFingerprint";
 
 export const runtime = "nodejs";
 

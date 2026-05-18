@@ -1,3 +1,3 @@
-import { initializePostHog } from "@/lib/analytics/posthog";
+import { initializePostHog } from "@/ui/analytics/posthog";
 
 initializePostHog();

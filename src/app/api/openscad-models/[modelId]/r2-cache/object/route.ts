@@ -2,11 +2,11 @@ import { NextResponse } from "next/server";
 import {
   getOpenScadCacheModel,
   isValidModelObjectKey,
-} from "@/lib/openscad/modelCache";
+} from "@/server/openscad/modelCache";
 import {
   createPresignedR2Url,
   getR2Config,
-} from "@/lib/r2/signing";
+} from "@/server/r2/signing";
 
 type RouteContext = {
   params: Promise<{ modelId: string }>;
