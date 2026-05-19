@@ -3,6 +3,7 @@
 import {
   Download,
   ExternalLink,
+  Home,
   ImagePlus,
   Link,
   QrCode,
@@ -11,7 +12,17 @@ import {
   Settings2,
 } from "lucide-react";
 import QRCode from "qrcode";
-import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ChangeEvent,
+  type PointerEvent as ReactPointerEvent,
+  type WheelEvent as ReactWheelEvent,
+} from "react";
 import { ComboboxInput } from "@/ui/components/ui/ComboboxInput";
 import { captureEvent } from "@/ui/analytics/posthog";
 import type { GridfinityAppProps } from "../types";
@@ -51,6 +62,12 @@ type ThreadSizeOption = {
   lengths: string[];
 };
 
+type PreviewView = {
+  x: number;
+  y: number;
+  scale: number;
+};
+
 const labelSizes: LabelSize[] = [
   { id: "35x12", name: "35 x 12", widthMm: 35, heightMm: 12 },
   { id: "42x12", name: "42 x 12", widthMm: 42, heightMm: 12 },
@@ -58,6 +75,56 @@ const labelSizes: LabelSize[] = [
   { id: "60x20", name: "60 x 20", widthMm: 60, heightMm: 20 },
   { id: "70x25", name: "70 x 25", widthMm: 70, heightMm: 25 },
 ];
+const previewPxPerMm = 11;
+const previewGridSizeMm = 5;
+const homePreviewReferenceWidthMm = 42;
+const homePreviewScaleMultiplier = 1.3;
+const minPreviewScale = 0.2;
+const maxPreviewScale = 4;
+const minVisiblePreviewLabelPx = 24;
+
+function clampPreviewView(
+  view: PreviewView,
+  {
+    labelHeight,
+    labelWidth,
+    surfaceHeight,
+    surfaceWidth,
+  }: {
+    labelHeight: number;
+    labelWidth: number;
+    surfaceHeight: number;
+    surfaceWidth: number;
+  },
+): PreviewView {
+  if (surfaceWidth <= 0 || surfaceHeight <= 0) {
+    return view;
+  }
+
+  const scaledWidth = labelWidth * view.scale;
+  const scaledHeight = labelHeight * view.scale;
+  const minX = minVisiblePreviewLabelPx - surfaceWidth / 2 - scaledWidth / 2;
+  const maxX = surfaceWidth / 2 - minVisiblePreviewLabelPx + scaledWidth / 2;
+  const minY = minVisiblePreviewLabelPx - surfaceHeight / 2 - scaledHeight / 2;
+  const maxY = surfaceHeight / 2 - minVisiblePreviewLabelPx + scaledHeight / 2;
+
+  return {
+    scale: view.scale,
+    x: Math.min(maxX, Math.max(minX, view.x)),
+    y: Math.min(maxY, Math.max(minY, view.y)),
+  };
+}
+
+function getHomePreviewScale(labelSize: LabelSize) {
+  return Math.min(
+    maxPreviewScale,
+    Math.max(
+      minPreviewScale,
+      (homePreviewReferenceWidthMm / labelSize.widthMm) *
+        homePreviewScaleMultiplier,
+    ),
+  );
+}
 
 const fasteners: Array<{
   id: FastenerId;
@@ -694,6 +761,15 @@ function CustomArtworkPlaceholder({ profile }: { profile: "side" | "top" }) {
 }
 
 export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
+  const previewSurfaceRef = useRef<HTMLDivElement | null>(null);
+  const previewGridRef = useRef<HTMLCanvasElement | null>(null);
+  const panStartRef = useRef<{
+    pointerId: number;
+    clientX: number;
+    clientY: number;
+    x: number;
+    y: number;
+  } | null>(null);
   const [hasLoadedStoredSettings, setHasLoadedStoredSettings] = useState(false);
   const [fastenerId, setFastenerId] = useState(defaults.fastenerId);
   const [itemName, setItemName] = useState(defaults.itemName);
@@ -721,6 +797,16 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
   const [customPrimaryImage, setCustomPrimaryImage] = useState("");
   const [customSecondaryImage, setCustomSecondaryImage] = useState("");
   const [qrCode, setQrCode] = useState({ source: "", dataUrl: "" });
+  const [previewView, setPreviewView] = useState<PreviewView>({
+    x: 0,
+    y: 0,
+    scale: 1,
+  });
+  const [isPreviewPanning, setIsPreviewPanning] = useState(false);
+  const [previewSurfaceSize, setPreviewSurfaceSize] = useState({
+    width: 0,
+    height: 0,
+  });
 
   const fastener = getFastener(fastenerId);
   const selectedItemTypeId: ItemTypeId = isCustomArtwork
@@ -787,8 +873,26 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
     qrCode.source === trimmedQrUrl &&
     qrCode.dataUrl.length > 0;
   const previewRatio = `${labelSize.widthMm} / ${labelSize.heightMm}`;
-  const previewWidthPx = labelSize.widthMm * 11;
-  const previewHeightPx = labelSize.heightMm * 11;
+  const previewWidthPx = labelSize.widthMm * previewPxPerMm;
+  const previewHeightPx = labelSize.heightMm * previewPxPerMm;
+  const boundedPreviewView = useMemo(
+    () =>
+      clampPreviewView(previewView, {
+        labelHeight: previewHeightPx,
+        labelWidth: previewWidthPx,
+        surfaceHeight: previewSurfaceSize.height,
+        surfaceWidth: previewSurfaceSize.width,
+      }),
+    [previewHeightPx, previewSurfaceSize, previewView, previewWidthPx],
+  );
+  const previewTransformStyle = {
+    "--preview-grid-size": `${
+      previewGridSizeMm * previewPxPerMm * boundedPreviewView.scale
+    }px`,
+    "--preview-pan-x": `${boundedPreviewView.x}px`,
+    "--preview-pan-y": `${boundedPreviewView.y}px`,
+    "--preview-scale": boundedPreviewView.scale,
+  } as CSSProperties;
 
   const sizeDescription = useMemo(
     () =>
@@ -899,6 +1003,87 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
     };
   }, [showQr, trimmedQrUrl]);
 
+  useLayoutEffect(() => {
+    const surface = previewSurfaceRef.current;
+    if (!surface) {
+      return;
+    }
+
+    const updatePreviewSurfaceSize = () => {
+      const rect = surface.getBoundingClientRect();
+      setPreviewSurfaceSize({
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      });
+    };
+    const observer = new ResizeObserver(updatePreviewSurfaceSize);
+
+    updatePreviewSurfaceSize();
+    observer.observe(surface);
+
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const canvas = previewGridRef.current;
+    const surface = previewSurfaceRef.current;
+    if (!canvas || !surface || previewSurfaceSize.width <= 0 || previewSurfaceSize.height <= 0) {
+      return;
+    }
+
+    const pixelRatio = window.devicePixelRatio || 1;
+    const width = previewSurfaceSize.width;
+    const height = previewSurfaceSize.height;
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      return;
+    }
+
+    canvas.width = Math.round(width * pixelRatio);
+    canvas.height = Math.round(height * pixelRatio);
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+
+    context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    context.clearRect(0, 0, width, height);
+    context.strokeStyle =
+      getComputedStyle(surface).getPropertyValue("--grid-line").trim() ||
+      "rgba(23, 33, 31, 0.08)";
+    context.lineWidth = 1 / pixelRatio;
+
+    const gridSize =
+      previewGridSizeMm * previewPxPerMm * boundedPreviewView.scale;
+    const originX = width / 2 + boundedPreviewView.x;
+    const originY = height / 2 + boundedPreviewView.y;
+    const alignToDevicePixel = (value: number) =>
+      (Math.round(value * pixelRatio) + 0.5) / pixelRatio;
+
+    context.beginPath();
+
+    for (
+      let x = originX - Math.ceil(originX / gridSize) * gridSize;
+      x <= width;
+      x += gridSize
+    ) {
+      const alignedX = alignToDevicePixel(x);
+      context.moveTo(alignedX, 0);
+      context.lineTo(alignedX, height);
+    }
+
+    for (
+      let y = originY - Math.ceil(originY / gridSize) * gridSize;
+      y <= height;
+      y += gridSize
+    ) {
+      const alignedY = alignToDevicePixel(y);
+      context.moveTo(0, alignedY);
+      context.lineTo(width, alignedY);
+    }
+
+    context.stroke();
+  }, [boundedPreviewView, previewSurfaceSize]);
+
   function updateCustomImage(
     event: ChangeEvent<HTMLInputElement>,
     setImage: (value: string) => void,
@@ -949,6 +1134,99 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
     setThreadSize(nextDetails.threadSize);
     setPitch(nextDetails.pitch);
     setLength(nextDetails.length);
+  }
+
+  function resetPreviewView() {
+    setPreviewView({ x: 0, y: 0, scale: getHomePreviewScale(labelSize) });
+  }
+
+  function zoomPreview(event: ReactWheelEvent<HTMLDivElement>) {
+    event.preventDefault();
+
+    const surface = previewSurfaceRef.current;
+    if (!surface) {
+      return;
+    }
+
+    const rect = surface.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const cursorOffsetX = event.clientX - centerX;
+    const cursorOffsetY = event.clientY - centerY;
+    const zoomFactor = Math.exp(-event.deltaY * 0.0015);
+
+    setPreviewView((current) => {
+      const nextScale = Math.min(
+        maxPreviewScale,
+        Math.max(minPreviewScale, current.scale * zoomFactor),
+      );
+      const scaleRatio = nextScale / current.scale;
+
+      return {
+        ...clampPreviewView(
+          {
+            scale: nextScale,
+            x: cursorOffsetX - (cursorOffsetX - current.x) * scaleRatio,
+            y: cursorOffsetY - (cursorOffsetY - current.y) * scaleRatio,
+          },
+          {
+            labelHeight: previewHeightPx,
+            labelWidth: previewWidthPx,
+            surfaceHeight: previewSurfaceSize.height,
+            surfaceWidth: previewSurfaceSize.width,
+          },
+        ),
+      };
+    });
+  }
+
+  function startPreviewPan(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.button !== 0) {
+      return;
+    }
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+    panStartRef.current = {
+      pointerId: event.pointerId,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      x: boundedPreviewView.x,
+      y: boundedPreviewView.y,
+    };
+    setIsPreviewPanning(true);
+  }
+
+  function panPreview(event: ReactPointerEvent<HTMLDivElement>) {
+    const panStart = panStartRef.current;
+
+    if (!panStart || panStart.pointerId !== event.pointerId) {
+      return;
+    }
+
+    setPreviewView((current) =>
+      clampPreviewView(
+        {
+          ...current,
+          x: panStart.x + event.clientX - panStart.clientX,
+          y: panStart.y + event.clientY - panStart.clientY,
+        },
+        {
+          labelHeight: previewHeightPx,
+          labelWidth: previewWidthPx,
+          surfaceHeight: previewSurfaceSize.height,
+          surfaceWidth: previewSurfaceSize.width,
+        },
+      ),
+    );
+  }
+
+  function stopPreviewPan(event: ReactPointerEvent<HTMLDivElement>) {
+    if (panStartRef.current?.pointerId !== event.pointerId) {
+      return;
+    }
+
+    panStartRef.current = null;
+    setIsPreviewPanning(false);
   }
 
   function renderDetailField(fieldId: DetailFieldId) {
@@ -1389,8 +1667,41 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
           </button>
         </div>
 
-        <div className={styles.previewSurface}>
-          <div className={styles.labelShadow}>
+        <div
+          aria-label="Label preview viewport"
+          className={styles.previewSurface}
+          data-panning={isPreviewPanning}
+          onPointerCancel={stopPreviewPan}
+          onPointerDown={startPreviewPan}
+          onPointerMove={panPreview}
+          onPointerUp={stopPreviewPan}
+          onWheel={zoomPreview}
+          ref={previewSurfaceRef}
+          style={previewTransformStyle}
+        >
+          <button
+            aria-label="Home view"
+            className={styles.previewHomeButton}
+            onClick={(event) => {
+              event.stopPropagation();
+              resetPreviewView();
+            }}
+            onPointerDown={(event) => event.stopPropagation()}
+            title="Home view"
+            type="button"
+          >
+            <Home aria-hidden="true" size={18} />
+          </button>
+          <canvas
+            aria-hidden="true"
+            className={styles.previewGrid}
+            data-testid="label-preview-grid"
+            ref={previewGridRef}
+          />
+          <div
+            className={styles.labelShadow}
+            data-testid="label-preview-transform"
+          >
             <div
               className={styles.label}
               style={{

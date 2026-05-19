@@ -48,6 +48,135 @@ test("restores label settings after a reload", async ({ page }) => {
   await expect(page.getByLabel("Additional Text")).toHaveValue("Reload me");
 });
 
+test("allows panning and zooming the label preview", async ({ page }) => {
+  const viewport = page.getByLabel("Label preview viewport");
+  const grid = page.getByTestId("label-preview-grid");
+  const preview = page.getByTestId("label-preview-transform");
+  const homeButton = viewport.getByRole("button", { name: "Home view" });
+
+  await expect(viewport).toBeVisible();
+  await expect(grid).toBeVisible();
+  await expect(preview).toBeVisible();
+  await expect(homeButton).toBeVisible();
+
+  const initialTransform = await preview.evaluate(
+    (element) => window.getComputedStyle(element).transform,
+  );
+  const initialGridSize = await viewport.evaluate(
+    (element) => window.getComputedStyle(element).getPropertyValue("--preview-grid-size"),
+  );
+  expect(initialGridSize.trim()).toBe("55px");
+
+  const viewportBox = await viewport.boundingBox();
+  expect(viewportBox).not.toBeNull();
+
+  if (!viewportBox) {
+    return;
+  }
+
+  await page.mouse.move(
+    viewportBox.x + viewportBox.width / 2,
+    viewportBox.y + viewportBox.height / 2,
+  );
+  await page.mouse.wheel(0, -420);
+
+  await expect
+    .poll(() =>
+      preview.evaluate((element) => window.getComputedStyle(element).transform),
+    )
+    .not.toBe(initialTransform);
+  await expect
+    .poll(() =>
+      viewport.evaluate((element) =>
+        window.getComputedStyle(element).getPropertyValue("--preview-grid-size"),
+      ),
+    )
+    .not.toBe(initialGridSize);
+
+  const zoomedTransform = await preview.evaluate(
+    (element) => window.getComputedStyle(element).transform,
+  );
+
+  await page.mouse.down();
+  await page.mouse.move(
+    viewportBox.x + viewportBox.width / 2 + 90,
+    viewportBox.y + viewportBox.height / 2 + 55,
+  );
+  await page.mouse.up();
+
+  await expect
+    .poll(() =>
+      preview.evaluate((element) => window.getComputedStyle(element).transform),
+    )
+    .not.toBe(zoomedTransform);
+
+  const expectPreviewOverlap = async () => {
+    const nextViewportBox = await viewport.boundingBox();
+    const previewBox = await preview.boundingBox();
+
+    expect(nextViewportBox).not.toBeNull();
+    expect(previewBox).not.toBeNull();
+
+    if (!nextViewportBox || !previewBox) {
+      return;
+    }
+
+    const overlapX =
+      Math.min(previewBox.x + previewBox.width, nextViewportBox.x + nextViewportBox.width) -
+      Math.max(previewBox.x, nextViewportBox.x);
+    const overlapY =
+      Math.min(previewBox.y + previewBox.height, nextViewportBox.y + nextViewportBox.height) -
+      Math.max(previewBox.y, nextViewportBox.y);
+
+    expect(overlapX).toBeGreaterThanOrEqual(20);
+    expect(overlapY).toBeGreaterThanOrEqual(20);
+  };
+
+  await page.mouse.move(
+    viewportBox.x + viewportBox.width / 2,
+    viewportBox.y + viewportBox.height / 2,
+  );
+  await page.mouse.wheel(0, 1500);
+  await expect
+    .poll(() =>
+      viewport.evaluate((element) =>
+        window.getComputedStyle(element).getPropertyValue("--preview-scale"),
+      ),
+    )
+    .toBe("0.2");
+  await page.mouse.down();
+  await page.mouse.move(
+    viewportBox.x + viewportBox.width / 2 + 2000,
+    viewportBox.y + viewportBox.height / 2 + 2000,
+    { steps: 4 },
+  );
+  await page.mouse.up();
+  await expectPreviewOverlap();
+
+  await page.mouse.down();
+  await page.mouse.move(
+    viewportBox.x + viewportBox.width / 2 - 2000,
+    viewportBox.y + viewportBox.height / 2 - 2000,
+    { steps: 4 },
+  );
+  await page.mouse.up();
+  await expectPreviewOverlap();
+
+  await homeButton.click();
+  await expect
+    .poll(() =>
+      viewport.evaluate((element) =>
+        window.getComputedStyle(element).getPropertyValue("--preview-scale"),
+      ),
+    )
+    .toBe("1.56");
+  await expect
+    .poll(() =>
+      preview.evaluate((element) => window.getComputedStyle(element).transform),
+    )
+    .toContain("matrix(1.56, 0, 0, 1.56, 0, 0)");
+});
+
 test("renders the grid generator and persists grid settings", async ({ page }) => {
   await page.getByRole("tab", { name: /Grid Generator/ }).click();
   await expect(page).toHaveURL(/\/grid-generator$/);
