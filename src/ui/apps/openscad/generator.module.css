@@ -191,6 +191,7 @@
     margin-top: 22px;
     margin-right: -12px;
     overflow: auto;
+    padding-left: 4px;
     padding-right: 12px;
     scrollbar-gutter: stable;
     scrollbar-color: color-mix(in srgb, var(--muted) 62%, transparent)
