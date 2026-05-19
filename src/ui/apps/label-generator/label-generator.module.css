@@ -27,9 +27,7 @@
 .previewToolbar,
 .previewToolbar button,
 .iconButton,
-.primaryButton,
-.summaryCard div,
-.summaryCard a {
+.primaryButton {
   display: flex;
   align-items: center;
 }
@@ -52,9 +50,7 @@
 }
 
 .panelHeader p,
-.previewToolbar p,
-.toggleRow small,
-.summaryCard span {
+.previewToolbar p {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.35;
@@ -76,6 +72,58 @@
   display: grid;
   gap: 10px;
   margin-top: 22px;
+}
+
+.panelScroll {
+  flex: 1;
+  min-height: 0;
+  margin-top: 22px;
+  margin-right: -12px;
+  overflow: auto;
+  padding-left: 4px;
+  padding-right: 12px;
+  scrollbar-gutter: stable;
+  scrollbar-color: color-mix(in srgb, var(--muted) 62%, transparent)
+    var(--surface);
+  scrollbar-width: thin;
+}
+
+.panelScroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.panelScroll::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.panelScroll::-webkit-scrollbar-thumb {
+  border: 2px solid var(--surface);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 62%, transparent);
+}
+
+.panelScroll::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--muted) 82%, transparent);
+}
+
+.panelScroll > .controlGroup:first-child {
+  margin-top: 0;
+}
+
+.formShell {
+  display: grid;
+  gap: 18px;
+  padding-bottom: 4px;
+}
+
+.panelActions {
+  flex: 0 0 auto;
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  background: var(--surface);
 }
 
 .detailsSection {
@@ -110,6 +158,10 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.typeDetailsGrid {
+  gap: 8px;
 }
 
 .fieldLabel,
@@ -195,6 +247,184 @@
   height: 100%;
 }
 
+.itemTypePicker {
+  position: relative;
+  min-width: 0;
+}
+
+.itemTypeButton,
+.itemTypeOption {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 54px auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--field);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.itemTypeButton {
+  min-height: 56px;
+  padding: 7px 9px 7px 11px;
+}
+
+.itemTypeButton > svg {
+  color: var(--muted);
+}
+
+.itemTypeButton[aria-expanded="true"] > svg {
+  transform: rotate(180deg);
+}
+
+.itemTypeOptionText {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.itemTypeOptionText strong,
+.itemTypeOptionText span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.itemTypeOptionText strong {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 760;
+  line-height: 1.1;
+}
+
+.itemTypeOptionText span {
+  color: color-mix(in srgb, var(--muted) 86%, var(--text));
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.itemTypeArtwork {
+  display: grid;
+  grid-template-columns: 22px 28px;
+  align-items: center;
+  justify-content: end;
+  gap: 4px;
+  min-width: 0;
+}
+
+.itemTypePrimaryArt {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 0;
+  padding: 4px;
+  overflow: hidden;
+}
+
+.itemTypePrimaryArt .topProfilePicture {
+  width: 100%;
+  height: 100%;
+}
+
+.itemTypeSecondaryArt {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 0;
+  padding: 3px 0;
+  overflow: hidden;
+}
+
+.itemTypeSecondaryArt .sideProfilePicture {
+  width: 100%;
+  height: 100%;
+}
+
+.itemTypeArtwork .customArtworkPlaceholder {
+  border-radius: 4px;
+}
+
+.itemTypeArtwork .customArtworkPlaceholder svg {
+  width: 16px;
+  height: 16px;
+}
+
+.itemTypePopover {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 7px);
+  left: 0;
+  right: 0;
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 6px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.itemTypePopover .itemTypeSearchInput {
+  grid-column: 1;
+  grid-row: 1;
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 0 10px 0 34px;
+  background: var(--field);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.itemTypePopover > svg {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
+  margin-left: 11px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.itemTypeListbox {
+  display: grid;
+  gap: 2px;
+  max-height: 280px;
+  overflow: auto;
+}
+
+.itemTypeOption {
+  min-height: 54px;
+  border-color: transparent;
+  padding: 7px 8px;
+  background: transparent;
+}
+
+.itemTypeOption:hover,
+.itemTypeOption:focus-visible,
+.itemTypeOption[aria-selected="true"] {
+  background: color-mix(in srgb, var(--brand-accent) 14%, var(--field));
+}
+
+.itemTypeOption > svg {
+  color: var(--brand-accent);
+}
+
+.itemTypeEmpty {
+  margin: 0;
+  padding: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 680;
+}
+
 .customArtworkImage {
   display: block;
   width: 100%;
@@ -211,6 +441,141 @@
   border-radius: 6px;
   color: var(--muted);
   background: color-mix(in srgb, var(--muted) 9%, transparent);
+}
+
+.artworkPicker {
+  display: grid;
+  align-items: stretch;
+  gap: 0;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.artworkPicker[data-profile="top"],
+.artworkPicker[data-profile="side"] {
+  min-height: 64px;
+}
+
+.artworkPicker[data-profile="top"],
+.artworkPicker[data-profile="side"] {
+  grid-template-columns: minmax(0, 7fr) minmax(86px, 3fr);
+}
+
+.artworkPicker:hover,
+.artworkPicker:focus-within {
+  border-color: color-mix(in srgb, var(--brand-accent) 42%, var(--border-strong));
+  background: color-mix(in srgb, var(--brand-accent) 7%, transparent);
+}
+
+.artworkPicker input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.artworkPreview {
+  display: grid;
+  place-items: center;
+  justify-self: center;
+  align-self: stretch;
+  min-width: 0;
+  padding: 0;
+  color: var(--text);
+}
+
+.artworkPreview[data-profile="top"] {
+  width: 48px;
+  height: 48px;
+  align-self: center;
+}
+
+.artworkPreview[data-profile="side"] {
+  width: calc(100% - 12px);
+  height: 48px;
+  align-self: center;
+}
+
+.artworkPreview .topProfilePicture,
+.artworkPreview .sideProfilePicture {
+  width: 100%;
+  height: 100%;
+}
+
+.artworkRecommendation {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 2px;
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  border: 1px solid color-mix(in srgb, var(--muted) 42%, transparent);
+  border-radius: 8px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.artworkRecommendation span {
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 760;
+  line-height: 1.1;
+}
+
+.fileAction {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 4px;
+  min-width: 0;
+  border-left: 1px solid color-mix(in srgb, var(--border-strong) 75%, transparent);
+  padding: 6px;
+  text-align: center;
+}
+
+.fileAction strong,
+.fileAction small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileAction strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 780;
+  line-height: 1;
+}
+
+.fileAction small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 760;
+  line-height: 1;
+}
+
+.artworkPicker input:focus-visible ~ .fileAction {
+  outline: 2px solid color-mix(in srgb, var(--brand-accent) 56%, transparent);
+  outline-offset: -3px;
+}
+
+.artworkPickerDisabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+.artworkPickerDisabled .fileAction {
+  cursor: not-allowed;
 }
 
 .fieldHeader {
@@ -275,6 +640,10 @@
   margin-top: 14px;
 }
 
+.imageField {
+  gap: 4px;
+}
+
 .twoColumn .field {
   margin-top: 0;
 }
@@ -298,6 +667,31 @@
   color: var(--text);
   font: inherit;
   font-size: 14px;
+}
+
+.inputWrap {
+  position: relative;
+}
+
+.inputWrap input {
+  padding-right: 52px;
+}
+
+.inputWrap small {
+  position: absolute;
+  top: 50%;
+  right: 11px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 760;
+  transform: translateY(-50%);
+}
+
+.customSizeGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
 }
 
 .unitPicker {
@@ -419,6 +813,7 @@
 .primaryButton {
   justify-content: center;
   gap: 8px;
+  width: 100%;
   min-height: 40px;
   border: 0;
   border-radius: 8px;
@@ -430,6 +825,24 @@
   font-size: 14px;
   font-weight: 760;
   white-space: nowrap;
+}
+
+.secondaryButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid color-mix(in srgb, var(--brand-accent) 24%, transparent);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: color-mix(in srgb, var(--brand-accent) 13%, var(--surface));
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 740;
 }
 
 .previewSurface {
@@ -657,39 +1070,6 @@
   accent-color: var(--brand-accent);
 }
 
-.summaryCard {
-  display: grid;
-  gap: 10px;
-  margin-top: 18px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 13px;
-  background: var(--field);
-}
-
-.summaryCard div,
-.summaryCard a {
-  min-width: 0;
-  gap: 8px;
-}
-
-.summaryCard span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.summaryCard a {
-  justify-content: center;
-  min-height: 36px;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 720;
-}
-
 @media (max-width: 1260px) {
   .appFrame {
     grid-template-columns: minmax(280px, 340px) minmax(420px, 1fr);
@@ -702,7 +1082,7 @@
   }
 }
 
-@media (max-width: 760px) {
+  @media (max-width: 760px) {
   .appFrame {
     grid-template-columns: 1fr;
     overflow: auto;
@@ -745,5 +1125,19 @@
   .detailsGrid,
   .sizeGrid {
     grid-template-columns: 1fr;
+  }
+
+  .artworkPicker {
+    grid-template-columns: 1fr;
+  }
+
+  .fileAction {
+    border-top: 1px solid color-mix(in srgb, var(--border-strong) 75%, transparent);
+    border-left: 0;
+  }
+
+  .artworkPreview[data-profile="top"],
+  .artworkPreview[data-profile="side"] {
+    width: 100%;
   }
 }

@@ -1,30 +1,38 @@
 "use client";
 
 import {
+  Check,
+  ChevronDown,
   Download,
-  ExternalLink,
   Home,
   ImagePlus,
-  Link,
-  QrCode,
+  PanelLeft,
   RotateCcw,
-  Ruler,
-  Settings2,
+  Search,
+  SlidersHorizontal,
+  Upload,
 } from "lucide-react";
 import QRCode from "qrcode";
 import {
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
   type ChangeEvent,
+  type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type WheelEvent as ReactWheelEvent,
 } from "react";
 import { ComboboxInput } from "@/ui/components/ui/ComboboxInput";
 import { captureEvent } from "@/ui/analytics/posthog";
+import {
+  GeneratorPanel,
+  OpenScadGeneratorShell,
+} from "@/ui/apps/openscad/OpenScadGeneratorShell";
+import { CollapsibleSection } from "@/ui/apps/openscad/parameterControls";
 import type { GridfinityAppProps } from "../types";
 import styles from "./label-generator.module.css";
 
@@ -75,13 +83,18 @@ const labelSizes: LabelSize[] = [
   { id: "60x20", name: "60 x 20", widthMm: 60, heightMm: 20 },
   { id: "70x25", name: "70 x 25", widthMm: 70, heightMm: 25 },
 ];
+const customLabelSizeId = "custom";
+const minLabelWidthMm = 10;
+const maxLabelWidthMm = 180;
+const minLabelHeightMm = 6;
+const maxLabelHeightMm = 80;
 const previewPxPerMm = 11;
 const previewGridSizeMm = 5;
 const homePreviewReferenceWidthMm = 42;
 const homePreviewScaleMultiplier = 1.3;
 const minPreviewScale = 0.2;
 const maxPreviewScale = 4;
-const minVisiblePreviewLabelPx = 24;
+const minVisiblePreviewLabelPx = 48;
 
 function clampPreviewView(
   view: PreviewView,
@@ -169,6 +182,20 @@ const fasteners: Array<{
     standard: "ISO 7089 / DIN 125",
   },
 ];
+const itemTypeOptions = [
+  ...fasteners.map((fastener) => fastener.id),
+  "custom",
+] as const satisfies readonly ItemTypeId[];
+
+const itemTypeDescriptions: Record<ItemTypeId, string> = {
+  "socket-cap": "Cylindrical hex socket cap screws",
+  "button-head": "Low profile rounded socket screws",
+  "flat-head": "Countersunk socket flat head screws",
+  "hex-bolt": "External hex head threaded bolts",
+  nut: "Hexagonal internally threaded nuts",
+  washer: "Flat round spacing and load washers",
+  custom: "User supplied artwork and label text",
+};
 
 // Edit this map to control pitch/length suggestions for each thread size.
 // `standard` means the coarse pitch for that size and is intentionally omitted
@@ -349,8 +376,8 @@ const detailFields: Record<
   }
 > = {
   itemName: { label: "Item Name", layout: "full" },
-  primaryImage: { label: "Primary image", layout: "half" },
-  secondaryImage: { label: "Secondary image", layout: "half" },
+  primaryImage: { label: "Primary image", layout: "full" },
+  secondaryImage: { label: "Secondary image", layout: "full" },
   standard: { label: "ISO / DIN standard", layout: "full" },
   threadSize: { label: "Thread Size", layout: "half" },
   pitch: { label: "Pitch", layout: "half" },
@@ -427,7 +454,6 @@ const detailFieldsByItemType: Record<ItemTypeId, DetailFieldId[]> = {
     "secondaryImage",
   ],
   custom: [
-    "measurementSystem",
     "itemName",
     "note",
     "qrUrl",
@@ -440,6 +466,8 @@ const defaults = {
   fastenerId: "socket-cap" as FastenerId,
   itemName: "Custom item",
   sizeId: "35x12",
+  customWidthMm: 35,
+  customHeightMm: 12,
   measurementSystem: "metric" as MeasurementSystem,
   threadSize: defaultThreadDetailsBySystem.metric.threadSize,
   pitch: defaultThreadDetailsBySystem.metric.pitch,
@@ -480,6 +508,27 @@ function readString<T extends string>(
     : fallback;
 }
 
+function readNumber(
+  value: unknown,
+  fallback: number,
+  min: number,
+  max: number,
+) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return Math.min(max, Math.max(min, value));
+}
+
+function getItemTypeLabel(itemType: string) {
+  if (itemType === "custom") {
+    return "Custom";
+  }
+
+  return fasteners.find((fastener) => fastener.id === itemType)?.name ?? itemType;
+}
+
 function readStoredLabelSettings(): LabelGeneratorSettings {
   if (typeof window === "undefined") {
     return defaultLabelSettings;
@@ -511,7 +560,19 @@ function readStoredLabelSettings(): LabelGeneratorSettings {
       sizeId: readString(
         parsed.sizeId,
         defaults.sizeId,
-        labelSizes.map((size) => size.id),
+        [...labelSizes.map((size) => size.id), customLabelSizeId],
+      ),
+      customWidthMm: readNumber(
+        parsed.customWidthMm,
+        defaults.customWidthMm,
+        minLabelWidthMm,
+        maxLabelWidthMm,
+      ),
+      customHeightMm: readNumber(
+        parsed.customHeightMm,
+        defaults.customHeightMm,
+        minLabelHeightMm,
+        maxLabelHeightMm,
       ),
       measurementSystem: readString(
         parsed.measurementSystem,
@@ -760,6 +821,216 @@ function CustomArtworkPlaceholder({ profile }: { profile: "side" | "top" }) {
   );
 }
 
+function ItemTypeArtwork({
+  customPrimaryImage,
+  customSecondaryImage,
+  itemType,
+}: {
+  customPrimaryImage: string;
+  customSecondaryImage: string;
+  itemType: ItemTypeId;
+}) {
+  const primaryArtwork =
+    itemType === "custom" ? (
+      customPrimaryImage ? (
+        <CustomArtworkImage profile="top" src={customPrimaryImage} />
+      ) : (
+        <CustomArtworkPlaceholder profile="top" />
+      )
+    ) : (
+      <FastenerPicture id={itemType} profile="top" />
+    );
+  const secondaryArtwork =
+    itemType === "custom" ? (
+      customSecondaryImage ? (
+        <CustomArtworkImage profile="side" src={customSecondaryImage} />
+      ) : (
+        <CustomArtworkPlaceholder profile="side" />
+      )
+    ) : (
+      <FastenerPicture id={itemType} profile="side" />
+    );
+
+  return (
+    <span className={styles.itemTypeArtwork} aria-hidden="true">
+      <span className={styles.itemTypePrimaryArt}>
+        {primaryArtwork}
+      </span>
+      <span className={styles.itemTypeSecondaryArt}>
+        {secondaryArtwork}
+      </span>
+    </span>
+  );
+}
+
+function ItemTypeRow({
+  customPrimaryImage,
+  customSecondaryImage,
+  itemType,
+}: {
+  customPrimaryImage: string;
+  customSecondaryImage: string;
+  itemType: ItemTypeId;
+}) {
+  return (
+    <>
+      <span className={styles.itemTypeOptionText}>
+        <strong>{getItemTypeLabel(itemType)}</strong>
+        <span>{itemTypeDescriptions[itemType]}</span>
+      </span>
+      <ItemTypeArtwork
+        customPrimaryImage={customPrimaryImage}
+        customSecondaryImage={customSecondaryImage}
+        itemType={itemType}
+      />
+    </>
+  );
+}
+
+function ItemTypePicker({
+  customPrimaryImage,
+  customSecondaryImage,
+  onChange,
+  value,
+}: {
+  customPrimaryImage: string;
+  customSecondaryImage: string;
+  onChange: (value: ItemTypeId) => void;
+  value: ItemTypeId;
+}) {
+  const listboxId = useId();
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
+  const filteredOptions = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+
+    return itemTypeOptions.filter((option) => {
+      if (!normalizedQuery) {
+        return true;
+      }
+
+      return getItemTypeLabel(option).toLowerCase().includes(normalizedQuery);
+    });
+  }, [query]);
+
+  function openPicker() {
+    setIsOpen(true);
+    setQuery("");
+    setActiveIndex(Math.max(0, itemTypeOptions.indexOf(value)));
+    window.setTimeout(() => searchInputRef.current?.focus(), 0);
+  }
+
+  function commitOption(option: ItemTypeId) {
+    onChange(option);
+    setIsOpen(false);
+    setQuery("");
+    setActiveIndex(0);
+  }
+
+  function handleSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveIndex((index) =>
+        Math.min(index + 1, Math.max(filteredOptions.length - 1, 0)),
+      );
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveIndex((index) => Math.max(index - 1, 0));
+      return;
+    }
+
+    if (event.key === "Enter" && filteredOptions[activeIndex]) {
+      event.preventDefault();
+      commitOption(filteredOptions[activeIndex]);
+      return;
+    }
+
+    if (event.key === "Escape") {
+      setIsOpen(false);
+    }
+  }
+
+  return (
+    <div className={styles.itemTypePicker}>
+      <button
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        aria-label="Item Type"
+        className={styles.itemTypeButton}
+        onClick={() => {
+          if (isOpen) {
+            setIsOpen(false);
+            return;
+          }
+
+          openPicker();
+        }}
+        type="button"
+      >
+        <ItemTypeRow
+          customPrimaryImage={customPrimaryImage}
+          customSecondaryImage={customSecondaryImage}
+          itemType={value}
+        />
+        <ChevronDown aria-hidden="true" size={16} />
+      </button>
+
+      {isOpen ? (
+        <div
+          className={styles.itemTypePopover}
+          onBlur={() => window.setTimeout(() => setIsOpen(false), 120)}
+        >
+          <input
+            ref={searchInputRef}
+            aria-controls={listboxId}
+            aria-label="Search Item Types"
+            autoComplete="off"
+            className={styles.itemTypeSearchInput}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setActiveIndex(0);
+            }}
+            onKeyDown={handleSearchKeyDown}
+            placeholder="Search item types"
+            value={query}
+          />
+          <Search aria-hidden="true" size={16} />
+          <div className={styles.itemTypeListbox} id={listboxId} role="listbox">
+            {filteredOptions.map((option, index) => (
+              <button
+                aria-selected={option === value}
+                className={styles.itemTypeOption}
+                id={`${listboxId}-${index}`}
+                key={option}
+                onMouseDown={(event) => event.preventDefault()}
+                onMouseEnter={() => setActiveIndex(index)}
+                onClick={() => commitOption(option)}
+                role="option"
+                type="button"
+              >
+                <ItemTypeRow
+                  customPrimaryImage={customPrimaryImage}
+                  customSecondaryImage={customSecondaryImage}
+                  itemType={option}
+                />
+                {option === value ? <Check aria-hidden="true" size={15} /> : null}
+              </button>
+            ))}
+            {filteredOptions.length === 0 ? (
+              <p className={styles.itemTypeEmpty}>No item types found</p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
   const previewSurfaceRef = useRef<HTMLDivElement | null>(null);
   const previewGridRef = useRef<HTMLCanvasElement | null>(null);
@@ -774,6 +1045,14 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
   const [fastenerId, setFastenerId] = useState(defaults.fastenerId);
   const [itemName, setItemName] = useState(defaults.itemName);
   const [sizeId, setSizeId] = useState(defaults.sizeId);
+  const [customWidthMm, setCustomWidthMm] = useState(defaults.customWidthMm);
+  const [customHeightMm, setCustomHeightMm] = useState(defaults.customHeightMm);
+  const [customWidthDraft, setCustomWidthDraft] = useState(
+    String(defaults.customWidthMm),
+  );
+  const [customHeightDraft, setCustomHeightDraft] = useState(
+    String(defaults.customHeightMm),
+  );
   const [measurementSystem, setMeasurementSystem] = useState(
     defaults.measurementSystem,
   );
@@ -803,6 +1082,9 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
     scale: 1,
   });
   const [isPreviewPanning, setIsPreviewPanning] = useState(false);
+  const [expandedSections, setExpandedSections] = useState<
+    Record<string, boolean>
+  >({});
   const [previewSurfaceSize, setPreviewSurfaceSize] = useState({
     width: 0,
     height: 0,
@@ -812,11 +1094,28 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
   const selectedItemTypeId: ItemTypeId = isCustomArtwork
     ? "custom"
     : fastenerId;
+  const itemTypeValue = selectedItemTypeId;
   const enabledDetailFields = detailFieldsByItemType[selectedItemTypeId];
+  const visibleDetailFields = enabledDetailFields.filter(
+    (fieldId) =>
+      fieldId !== "primaryImage" &&
+      fieldId !== "secondaryImage" &&
+      fieldId !== "qrUrl",
+  );
   const hasDetailField = (fieldId: DetailFieldId) =>
     enabledDetailFields.includes(fieldId);
-  const labelSize =
-    labelSizes.find((size) => size.id === sizeId) ?? labelSizes[0];
+  const labelSize = useMemo(() => {
+    if (sizeId === customLabelSizeId) {
+      return {
+        id: customLabelSizeId,
+        name: "Custom",
+        widthMm: customWidthMm,
+        heightMm: customHeightMm,
+      };
+    }
+
+    return labelSizes.find((size) => size.id === sizeId) ?? labelSizes[0];
+  }, [customHeightMm, customWidthMm, sizeId]);
   const trimmedItemName = itemName.trim();
   const trimmedThreadSize = threadSize.trim();
   const trimmedLength = length.trim();
@@ -907,6 +1206,10 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
       setFastenerId(settings.fastenerId);
       setItemName(settings.itemName);
       setSizeId(settings.sizeId);
+      setCustomWidthMm(settings.customWidthMm);
+      setCustomHeightMm(settings.customHeightMm);
+      setCustomWidthDraft(String(settings.customWidthMm));
+      setCustomHeightDraft(String(settings.customHeightMm));
       setMeasurementSystem(settings.measurementSystem);
       setThreadSize(settings.threadSize);
       setPitch(settings.pitch);
@@ -936,6 +1239,8 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
       fastenerId,
       itemName,
       sizeId,
+      customWidthMm,
+      customHeightMm,
       measurementSystem,
       threadSize,
       pitch,
@@ -954,6 +1259,8 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
   }, [
     customPrimaryImage,
     customSecondaryImage,
+    customHeightMm,
+    customWidthMm,
     fastenerId,
     hasLoadedStoredSettings,
     isCustomArtwork,
@@ -1107,6 +1414,10 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
     setFastenerId(defaultLabelSettings.fastenerId);
     setItemName(defaultLabelSettings.itemName);
     setSizeId(defaultLabelSettings.sizeId);
+    setCustomWidthMm(defaultLabelSettings.customWidthMm);
+    setCustomHeightMm(defaultLabelSettings.customHeightMm);
+    setCustomWidthDraft(String(defaultLabelSettings.customWidthMm));
+    setCustomHeightDraft(String(defaultLabelSettings.customHeightMm));
     setMeasurementSystem(defaultLabelSettings.measurementSystem);
     setThreadSize(defaultLabelSettings.threadSize);
     setPitch(defaultLabelSettings.pitch);
@@ -1135,6 +1446,58 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
     setPitch(nextDetails.pitch);
     setLength(nextDetails.length);
   }
+
+  function selectItemType(itemType: string) {
+    if (itemType === "custom") {
+      setIsCustomArtwork(true);
+      return;
+    }
+
+    if (itemTypeOptions.includes(itemType as ItemTypeId)) {
+      setFastenerId(itemType as FastenerId);
+      setIsCustomArtwork(false);
+    }
+  }
+
+  function updateCustomWidth(value: string) {
+    setSizeId(customLabelSizeId);
+    setCustomWidthDraft(value);
+  }
+
+  function updateCustomHeight(value: string) {
+    setSizeId(customLabelSizeId);
+    setCustomHeightDraft(value);
+  }
+
+  function commitCustomWidth() {
+    const nextWidth = readNumber(
+      Number(customWidthDraft),
+      customWidthMm,
+      minLabelWidthMm,
+      maxLabelWidthMm,
+    );
+
+    setCustomWidthMm(nextWidth);
+    setCustomWidthDraft(String(nextWidth));
+  }
+
+  function commitCustomHeight() {
+    const nextHeight = readNumber(
+      Number(customHeightDraft),
+      customHeightMm,
+      minLabelHeightMm,
+      maxLabelHeightMm,
+    );
+
+    setCustomHeightMm(nextHeight);
+    setCustomHeightDraft(String(nextHeight));
+  }
+
+  const isSectionExpanded = (section: string, defaultExpanded: boolean) =>
+    expandedSections[section] ?? defaultExpanded;
+  const setSectionExpanded = (section: string, expanded: boolean) => {
+    setExpandedSections((current) => ({ ...current, [section]: expanded }));
+  };
 
   function resetPreviewView() {
     setPreviewView({ x: 0, y: 0, scale: getHomePreviewScale(labelSize) });
@@ -1229,6 +1592,65 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
     setIsPreviewPanning(false);
   }
 
+  function renderArtworkFallback(profile: "side" | "top") {
+    if (!isCustomArtwork) {
+      return <FastenerPicture id={fastenerId} profile={profile} />;
+    }
+
+    return (
+      <span className={styles.artworkRecommendation}>
+        <ImagePlus aria-hidden="true" size={profile === "top" ? 16 : 18} />
+        <span>{profile === "top" ? "Square" : "Wide"}</span>
+      </span>
+    );
+  }
+
+  function renderArtworkPicker({
+    disabled,
+    image,
+    onChange,
+    profile,
+  }: {
+    disabled: boolean;
+    image: string;
+    onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+    profile: "side" | "top";
+  }) {
+    return (
+      <label
+        className={`${styles.artworkPicker} ${
+          disabled ? styles.artworkPickerDisabled : ""
+        }`}
+        data-profile={profile}
+      >
+        <input
+          accept="image/*"
+          disabled={disabled}
+          onChange={onChange}
+          type="file"
+        />
+        <div
+          className={styles.artworkPreview}
+          data-profile={profile}
+          data-has-custom-image={image ? "true" : "false"}
+        >
+          {image ? (
+            <CustomArtworkImage profile={profile} src={image} />
+          ) : (
+            renderArtworkFallback(profile)
+          )}
+        </div>
+        <span className={styles.fileAction}>
+          <strong>
+            <Upload aria-hidden="true" size={13} />
+            Upload
+          </strong>
+          <small>{profile === "top" ? "1 x 1" : "22 x 7"}</small>
+        </span>
+      </label>
+    );
+  }
+
   function renderDetailField(fieldId: DetailFieldId) {
     const field = detailFields[fieldId];
     const className =
@@ -1250,7 +1672,7 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
       case "primaryImage":
         return (
           <div
-            className={`${className} ${
+            className={`${className} ${styles.imageField} ${
               !showPrimaryImage ? styles.disabledField : ""
             }`}
             key={fieldId}
@@ -1268,20 +1690,19 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
                 />
               </span>
             </div>
-            <input
-              accept="image/*"
-              disabled={!showPrimaryImage}
-              onChange={(event) =>
-                updateCustomImage(event, setCustomPrimaryImage)
-              }
-              type="file"
-            />
+            {renderArtworkPicker({
+              disabled: !showPrimaryImage,
+              image: customPrimaryImage,
+              onChange: (event) =>
+                updateCustomImage(event, setCustomPrimaryImage),
+              profile: "top",
+            })}
           </div>
         );
       case "secondaryImage":
         return (
           <div
-            className={`${className} ${
+            className={`${className} ${styles.imageField} ${
               !showSecondaryImage ? styles.disabledField : ""
             }`}
             key={fieldId}
@@ -1299,14 +1720,13 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
                 />
               </span>
             </div>
-            <input
-              accept="image/*"
-              disabled={!showSecondaryImage}
-              onChange={(event) =>
-                updateCustomImage(event, setCustomSecondaryImage)
-              }
-              type="file"
-            />
+            {renderArtworkPicker({
+              disabled: !showSecondaryImage,
+              image: customSecondaryImage,
+              onChange: (event) =>
+                updateCustomImage(event, setCustomSecondaryImage),
+              profile: "side",
+            })}
           </div>
         );
       case "standard":
@@ -1577,96 +1997,74 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
   }
 
   return (
-    <div className={styles.appFrame} data-accent={accent}>
-      <section className={styles.panel} aria-label="Label controls">
-        <div className={styles.panelHeader}>
-          <Settings2 aria-hidden="true" size={18} />
-          <div>
-            <h2>Label Creator</h2>
-            <p>Configure labels with item artwork and QR links.</p>
-          </div>
-          <button className={styles.iconButton} onClick={resetLabel} title="Reset label" type="button">
-            <RotateCcw aria-hidden="true" size={16} />
-          </button>
-        </div>
+    <OpenScadGeneratorShell
+      accent={accent}
+      parametersPanel={
+        <GeneratorPanel
+          ariaLabel="Label Parameters"
+          icon={<SlidersHorizontal aria-hidden="true" size={18} />}
+          title="Label Parameters"
+        >
+          <div className={styles.panelScroll}>
+            <div className={styles.formShell}>
+              <div data-parameter-section="Type">
+                <CollapsibleSection
+                  title="Type"
+                  expanded={isSectionExpanded("Type", true)}
+                  onExpandedChange={(expanded) =>
+                    setSectionExpanded("Type", expanded)
+                  }
+                >
+                  <div className={styles.fullDetailField}>
+                    <ItemTypePicker
+                      customPrimaryImage={customPrimaryImage}
+                      customSecondaryImage={customSecondaryImage}
+                      onChange={selectItemType}
+                      value={itemTypeValue}
+                    />
+                  </div>
+                  <div className={`${styles.detailsGrid} ${styles.typeDetailsGrid}`}>
+                    {renderDetailField("primaryImage")}
+                    {renderDetailField("secondaryImage")}
+                    {renderDetailField("qrUrl")}
+                  </div>
+                </CollapsibleSection>
+              </div>
 
-        <div className={styles.controlGroup}>
-          <div className={styles.sectionHeader}>
-            <h3>Item Type</h3>
+              <div data-parameter-section="Details">
+                <CollapsibleSection
+                  title="Details"
+                  expanded={isSectionExpanded("Details", true)}
+                  onExpandedChange={(expanded) =>
+                    setSectionExpanded("Details", expanded)
+                  }
+                >
+                  <div className={styles.detailsGrid}>
+                    {visibleDetailFields.map((fieldId) =>
+                      renderDetailField(fieldId),
+                    )}
+                  </div>
+                </CollapsibleSection>
+              </div>
+            </div>
           </div>
-          <div className={styles.fastenerGrid}>
-            {fasteners.map((option) => (
-              <button
-                className={
-                  !isCustomArtwork && option.id === fastenerId
-                    ? `${styles.fastenerOption} ${styles.selectedOption}`
-                    : styles.fastenerOption
-                }
-                key={option.id}
-                onClick={() => {
-                  setFastenerId(option.id);
-                  setIsCustomArtwork(false);
-                }}
-                type="button"
-              >
-                <span className={styles.fastenerOptionPictures}>
-                  <FastenerPicture id={option.id} profile="top" />
-                  <FastenerPicture id={option.id} profile="side" />
-                </span>
-                <span>{option.shortName}</span>
-              </button>
-            ))}
+
+          <div className={styles.panelActions}>
             <button
-              className={
-                isCustomArtwork
-                  ? `${styles.fastenerOption} ${styles.selectedOption}`
-                  : styles.fastenerOption
-              }
-              onClick={() => setIsCustomArtwork(true)}
+              className={styles.secondaryButton}
+              onClick={resetLabel}
               type="button"
             >
-              <span className={styles.fastenerOptionPictures}>
-                {customPrimaryImage ? (
-                  <CustomArtworkImage profile="top" src={customPrimaryImage} />
-                ) : (
-                  <CustomArtworkPlaceholder profile="top" />
-                )}
-                {customSecondaryImage ? (
-                  <CustomArtworkImage
-                    profile="side"
-                    src={customSecondaryImage}
-                  />
-                ) : (
-                  <CustomArtworkPlaceholder profile="side" />
-                )}
-              </span>
-              <span>Custom</span>
+              <RotateCcw aria-hidden="true" size={16} />
+              Reset Label
             </button>
           </div>
-        </div>
-
-        <div className={styles.detailsSection}>
-          <div className={styles.sectionHeader}>
-            <h3>Details</h3>
-          </div>
-          <div className={styles.detailsGrid}>
-            {enabledDetailFields.map((fieldId) => renderDetailField(fieldId))}
-          </div>
-        </div>
-      </section>
-
-      <section className={styles.previewPanel} aria-label="Label preview">
-        <div className={styles.previewToolbar}>
-          <div>
-            <h2>Label Preview</h2>
-            <p>{sizeDescription}</p>
-          </div>
-          <button className={styles.primaryButton} onClick={downloadPng} type="button">
-            <Download aria-hidden="true" size={16} />
-            Download PNG
-          </button>
-        </div>
-
+        </GeneratorPanel>
+      }
+      previewAriaLabel="Label Preview"
+      previewTitle="Label Preview"
+      previewStatus={sizeDescription}
+      preview={
         <div
           aria-label="Label preview viewport"
           className={styles.previewSurface}
@@ -1753,55 +2151,116 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
             </div>
           </div>
         </div>
-      </section>
+      }
+      outputPanel={
+        <GeneratorPanel
+          ariaLabel="Output Settings"
+          icon={<PanelLeft aria-hidden="true" size={18} />}
+          title="Output Settings"
+        >
+          <div className={styles.panelScroll}>
+            <div className={styles.controlGroup}>
+              <label className={styles.fieldLabel}>Label Size</label>
+              <div className={styles.sizeGrid}>
+                {labelSizes.map((size) => (
+                  <button
+                    className={
+                      size.id === sizeId
+                        ? `${styles.sizeOption} ${styles.selectedOption}`
+                        : styles.sizeOption
+                    }
+                    key={size.id}
+                    onClick={() => {
+                      setSizeId(size.id);
+                      setCustomWidthMm(size.widthMm);
+                      setCustomHeightMm(size.heightMm);
+                      setCustomWidthDraft(String(size.widthMm));
+                      setCustomHeightDraft(String(size.heightMm));
+                    }}
+                    type="button"
+                  >
+                    <span>{size.name}</span>
+                    <small>mm</small>
+                  </button>
+                ))}
+                <button
+                  className={
+                    sizeId === customLabelSizeId
+                      ? `${styles.sizeOption} ${styles.selectedOption}`
+                      : styles.sizeOption
+                  }
+                  onClick={() => setSizeId(customLabelSizeId)}
+                  type="button"
+                >
+                  <span>Custom</span>
+                  <small>mm</small>
+                </button>
+              </div>
+            </div>
 
-      <section className={styles.panel} aria-label="Label settings">
-        <div className={styles.panelHeader}>
-          <Ruler aria-hidden="true" size={18} />
-          <div>
-            <h2>Output Settings</h2>
-            <p>Pick the tape size and what appears on the printed label.</p>
-          </div>
-        </div>
+            <div className={styles.customSizeGrid}>
+              <label className={styles.field}>
+                <span>Width</span>
+                <div className={styles.inputWrap}>
+                  <input
+                    aria-label="Custom label width"
+                    inputMode="decimal"
+                    max={maxLabelWidthMm}
+                    min={minLabelWidthMm}
+                    onBlur={commitCustomWidth}
+                    onChange={(event) => updateCustomWidth(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        commitCustomWidth();
+                        event.currentTarget.blur();
+                      }
+                    }}
+                    step="1"
+                    type="text"
+                    value={customWidthDraft}
+                  />
+                  <small>mm</small>
+                </div>
+              </label>
+              <label className={styles.field}>
+                <span>Height</span>
+                <div className={styles.inputWrap}>
+                  <input
+                    aria-label="Custom label height"
+                    inputMode="decimal"
+                    max={maxLabelHeightMm}
+                    min={minLabelHeightMm}
+                    onBlur={commitCustomHeight}
+                    onChange={(event) => updateCustomHeight(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        commitCustomHeight();
+                        event.currentTarget.blur();
+                      }
+                    }}
+                    step="1"
+                    type="text"
+                    value={customHeightDraft}
+                  />
+                  <small>mm</small>
+                </div>
+              </label>
+            </div>
 
-        <div className={styles.controlGroup}>
-          <label className={styles.fieldLabel}>Label Size</label>
-          <div className={styles.sizeGrid}>
-            {labelSizes.map((size) => (
-              <button
-                className={
-                  size.id === sizeId
-                    ? `${styles.sizeOption} ${styles.selectedOption}`
-                    : styles.sizeOption
-                }
-                key={size.id}
-                onClick={() => setSizeId(size.id)}
-                type="button"
-              >
-                <span>{size.name}</span>
-                <small>mm</small>
-              </button>
-            ))}
           </div>
-        </div>
 
-        <div className={styles.summaryCard}>
-          <div>
-            <QrCode aria-hidden="true" size={18} />
-            <span>{canShowQr ? "QR ready" : "QR disabled"}</span>
+          <div className={styles.panelActions}>
+            <button
+              className={styles.primaryButton}
+              onClick={downloadPng}
+              type="button"
+            >
+              <Download aria-hidden="true" size={16} />
+              Download PNG
+            </button>
           </div>
-          <div>
-            <Link aria-hidden="true" size={18} />
-            <span>{qrUrl || "No URL"}</span>
-          </div>
-          {qrUrl ? (
-            <a href={qrUrl} target="_blank" rel="noreferrer">
-              Open URL
-              <ExternalLink aria-hidden="true" size={14} />
-            </a>
-          ) : null}
-        </div>
-      </section>
-    </div>
+        </GeneratorPanel>
+      }
+    />
   );
 }
