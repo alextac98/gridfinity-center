@@ -433,25 +433,65 @@
 }
 
 .previewSurface {
+  position: relative;
   display: grid;
   flex: 1;
   place-items: center;
   min-height: 0;
   padding: 28px;
-  overflow: auto;
-  background:
-    linear-gradient(var(--grid-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px),
-    var(--preview-bg);
-  background-size: 32px 32px;
+  overflow: hidden;
+  background: var(--preview-bg);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.previewSurface[data-panning="true"] {
+  cursor: grabbing;
+}
+
+.previewGrid {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.previewHomeButton {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(32, 54, 49, 0.28);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.88);
+  color: #203630;
+  cursor: pointer;
+  box-shadow: 0 8px 22px rgba(24, 53, 47, 0.12);
+}
+
+.previewHomeButton:hover {
+  background: #ffffff;
+  color: #102f29;
 }
 
 .labelShadow {
+  position: relative;
+  z-index: 1;
   width: fit-content;
   max-width: 100%;
   padding: 0;
   background: transparent;
   box-shadow: 0 22px 58px rgba(23, 33, 31, 0.16);
+  transform: translate(var(--preview-pan-x, 0), var(--preview-pan-y, 0))
+    scale(var(--preview-scale, 1));
+  transform-origin: center;
+  will-change: transform;
 }
 
 .label {
