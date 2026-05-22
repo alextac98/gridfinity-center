@@ -26,6 +26,11 @@ import {
   PreviewLoading,
 } from "../openscad/OpenScadGeneratorShell";
 import { OpenScadPreview } from "../openscad/OpenScadPreview";
+import {
+  openscadGroundPlaneStorageKey,
+  openscadOutputActionStorageKey,
+  openscadPreviewViewStorageKey,
+} from "../openscad/outputPreferenceKeys";
 import { readLocalStorageJson, writeLocalStorageJson } from "../openscad/storage";
 import { measureStlDimensions } from "../openscad/stlDimensions";
 import { useGroundPlanePreference } from "../openscad/useGroundPlanePreference";
@@ -42,7 +47,6 @@ import {
 } from "./gridOptions";
 
 const gridSettingsStorageKey = "gridfinity-grid-generator-settings";
-const groundPlaneStorageKey = "gridfinity-grid-generator-ground-plane";
 
 type StoredGridGeneratorSettings = {
   params: GridfinityBaseplateParameters;
@@ -442,7 +446,7 @@ function createGridAnalyticsProperties(params: GridfinityBaseplateParameters) {
 
 function readGroundPlaneBuildPlateSettings() {
   return readLocalStorageJson(
-    groundPlaneStorageKey,
+    openscadGroundPlaneStorageKey,
     null as { widthMm: number; depthMm: number } | null,
     (value) => {
       if (!isRecord(value)) {
@@ -502,7 +506,7 @@ export function GridGeneratorApp({ accent }: GridfinityAppProps) {
     workerErrorMessage:
       "The OpenSCAD worker failed to start. Check the browser console for details.",
   });
-  const groundPlane = useGroundPlanePreference(groundPlaneStorageKey);
+  const groundPlane = useGroundPlanePreference(openscadGroundPlaneStorageKey);
 
   const syncBuildPlateDimension = (
     value: string,
@@ -668,7 +672,7 @@ export function GridGeneratorApp({ accent }: GridfinityAppProps) {
           isLoading={model.isRendering}
           loadingMessage={model.isRendering ? model.renderStatus : undefined}
           onModelVisible={model.markPreviewVisible}
-          viewStorageKey="gridfinity-grid-generator-preview-view"
+          viewStorageKey={openscadPreviewViewStorageKey}
         />
       }
       outputPanel={
@@ -683,7 +687,7 @@ export function GridGeneratorApp({ accent }: GridfinityAppProps) {
           selectedBuildPlatePresetName={
             groundPlane.preference.selectedBuildPlatePresetName
           }
-          storageKey="gridfinity-grid-generator-output-action"
+          storageKey={openscadOutputActionStorageKey}
           onDownloadStl={model.downloadStl}
           onDownloadScad={model.downloadScad}
           onFloorModeChange={groundPlane.setFloorMode}

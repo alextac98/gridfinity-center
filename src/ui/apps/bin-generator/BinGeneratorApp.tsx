@@ -14,6 +14,11 @@ import type { GridfinityAppProps } from "../types";
 import { GeneratorPanel, LoadingPanel, OpenScadGeneratorShell, PreviewLoading } from "../openscad/OpenScadGeneratorShell";
 import { ModelOutputPanel } from "../openscad/ModelOutputPanel";
 import { OpenScadPreview } from "../openscad/OpenScadPreview";
+import {
+  openscadGroundPlaneStorageKey,
+  openscadOutputActionStorageKey,
+  openscadPreviewViewStorageKey,
+} from "../openscad/outputPreferenceKeys";
 import { readLocalStorageJson, writeLocalStorageJson } from "../openscad/storage";
 import { useGroundPlanePreference } from "../openscad/useGroundPlanePreference";
 import { useOpenScadModel } from "../openscad/useOpenScadModel";
@@ -22,7 +27,6 @@ import { numberFields, type NumberField } from "./binOptions";
 import { measureStlDimensions } from "../openscad/stlDimensions";
 
 const binSettingsStorageKey = "gridfinity-bin-generator-settings";
-const groundPlaneStorageKey = "gridfinity-bin-generator-ground-plane";
 
 type StoredBinGeneratorSettings = {
   params: GridfinityBinParameters;
@@ -271,7 +275,7 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
     workerErrorMessage:
       "The OpenSCAD worker failed to start. Check the browser console for details.",
   });
-  const groundPlane = useGroundPlanePreference(groundPlaneStorageKey);
+  const groundPlane = useGroundPlanePreference(openscadGroundPlaneStorageKey);
 
   useEffect(() => {
     writeStoredBinSettings(params, draft);
@@ -362,7 +366,7 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
           isLoading={model.isRendering}
           loadingMessage={model.isRendering ? model.renderStatus : undefined}
           onModelVisible={model.markPreviewVisible}
-          viewStorageKey="gridfinity-bin-generator-preview-view"
+          viewStorageKey={openscadPreviewViewStorageKey}
         />
       }
       outputPanel={
@@ -377,7 +381,7 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
           selectedBuildPlatePresetName={
             groundPlane.preference.selectedBuildPlatePresetName
           }
-          storageKey="gridfinity-bin-generator-output-action"
+          storageKey={openscadOutputActionStorageKey}
           onDownloadStl={model.downloadStl}
           onDownloadScad={model.downloadScad}
           onFloorModeChange={groundPlane.setFloorMode}
