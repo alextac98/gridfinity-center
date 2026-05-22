@@ -569,6 +569,11 @@
     color: var(--text);
 }
 
+.unitSwitch .unitButtonActive:hover {
+    background: var(--brand-accent);
+    color: var(--accent-button-text);
+}
+
 .unitSwitch button:focus-visible {
     position: relative;
     z-index: 1;
