@@ -490,6 +490,97 @@
     white-space: nowrap;
 }
 
+.autoInputWrap {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.autoInputWrap input {
+    padding-right: 54px;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.autoInputWrap small {
+    position: absolute;
+    top: 50%;
+    right: 88px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 760;
+    transform: translateY(-50%);
+}
+
+.autoInputWrap button {
+    min-height: 40px;
+    border: 1px solid var(--border-strong);
+    border-left: 0;
+    border-radius: 0 8px 8px 0;
+    padding: 0 12px;
+    background: color-mix(in srgb, var(--brand-accent) 13%, var(--surface));
+    color: var(--text);
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 760;
+}
+
+.autoInputWrap button:hover {
+    background: color-mix(in srgb, var(--brand-accent) 20%, var(--surface));
+}
+
+.autoInputWrap button:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--brand-accent) 56%, transparent);
+    outline-offset: 2px;
+}
+
+.unitSwitch {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow: hidden;
+    min-height: 40px;
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    background: var(--field);
+}
+
+.floorSwitch {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.unitSwitch button {
+    border: 0;
+    border-right: 1px solid var(--border-strong);
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 760;
+    cursor: pointer;
+}
+
+.unitSwitch button:last-child {
+    border-right: 0;
+}
+
+.unitSwitch button:hover {
+    background: color-mix(in srgb, var(--brand-accent) 10%, transparent);
+    color: var(--text);
+}
+
+.unitSwitch button:focus-visible {
+    position: relative;
+    z-index: 1;
+    outline: 2px solid color-mix(in srgb, var(--brand-accent) 56%, transparent);
+    outline-offset: -2px;
+}
+
+.unitSwitch .unitButtonActive {
+    background: var(--brand-accent);
+    color: var(--accent-button-text);
+}
+
 .tupleField {
     grid-column: 1 / -1;
 }
@@ -659,6 +750,11 @@
     grid-template-columns: minmax(0, 1fr) 42px;
     gap: 8px;
     align-items: end;
+}
+
+.buildPlateSplitControls {
+    display: grid;
+    gap: 12px;
 }
 
 .buildPlatePreset {

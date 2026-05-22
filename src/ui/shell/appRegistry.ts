@@ -30,7 +30,6 @@ export const apps = [
     },
     icon: Grid3X3,
     Component: GridGeneratorApp,
-    statusTag: "alpha",
     accent: "blue",
   },
   {

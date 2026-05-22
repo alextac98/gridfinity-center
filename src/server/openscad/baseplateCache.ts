@@ -28,6 +28,19 @@ function isAlignment(value: unknown) {
   return value === "near" || value === "center" || value === "far";
 }
 
+function isBaseplateDimensionUnit(value: unknown) {
+  return value === "u" || value === "mm" || value === "in";
+}
+
+function isBaseplateFillMode(value: unknown) {
+  return (
+    value === "crop" ||
+    value === "grid" ||
+    value === "solid" ||
+    value === "grid-solid"
+  );
+}
+
 export function isGridfinityBaseplateParameters(
   value: unknown,
 ): value is GridfinityBaseplateParameters {
@@ -42,6 +55,10 @@ export function isGridfinityBaseplateParameters(
     Number.isFinite(params.widthUnits) &&
     typeof params.depthUnits === "number" &&
     Number.isFinite(params.depthUnits) &&
+    isBaseplateDimensionUnit(params.widthUnit) &&
+    isBaseplateDimensionUnit(params.depthUnit) &&
+    isBaseplateDimensionUnit(params.solidUnit) &&
+    isBaseplateFillMode(params.fillMode) &&
     (params.plateStyle === "default" || params.plateStyle === "cnclaser") &&
     (params.oversizeMethod === "crop" || params.oversizeMethod === "fill") &&
     isAlignment(params.positionFillGridX) &&

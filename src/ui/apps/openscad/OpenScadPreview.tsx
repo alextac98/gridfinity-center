@@ -43,6 +43,7 @@ type OpenScadPreviewProps = {
 };
 
 export type GroundPlaneConfig = {
+  mode: "grid" | "build-plate";
   visible: boolean;
   widthMm: number;
   depthMm: number;
@@ -319,6 +320,49 @@ function createGroundPlaneMesh(
   const group = new Group();
   group.position.set(modelCenter.x, modelCenter.y, modelBounds.min.z - 0.08);
 
+  if (groundPlane.mode === "grid") {
+    const gridSize = Math.max(2200, Math.ceil(modelBounds.getSize(new Vector3()).length() / 100) * 1000);
+    const halfSize = gridSize / 2;
+    const minorSpacingMm = 10;
+    const majorSpacingMm = 50;
+    const minorVertices: number[] = [];
+    const majorVertices: number[] = [];
+
+    for (let offset = -halfSize; offset <= halfSize; offset += minorSpacingMm) {
+      const target =
+        Math.abs(offset % majorSpacingMm) < 0.001 ? majorVertices : minorVertices;
+
+      target.push(offset, -halfSize, 0.02, offset, halfSize, 0.02);
+      target.push(-halfSize, offset, 0.02, halfSize, offset, 0.02);
+    }
+
+    const createGrid = (
+      vertices: number[],
+      opacity: number,
+      role: string,
+    ) => {
+      const geometry = new BufferGeometry();
+      geometry.setAttribute("position", new Float32BufferAttribute(vertices, 3));
+      const grid = new LineSegments(
+        geometry,
+        new LineBasicMaterial({
+          color: theme.groundPlaneOutline,
+          depthWrite: false,
+          opacity,
+          transparent: true,
+        }),
+      );
+      grid.renderOrder = role === "groundPlaneMajorGrid" ? 1 : 0;
+      grid.userData.viewerRole = role;
+      group.add(grid);
+    };
+
+    createGrid(minorVertices, 0.14, "groundPlaneGrid");
+    createGrid(majorVertices, 0.54, "groundPlaneMajorGrid");
+
+    return group;
+  }
+
   const plane = new Mesh(
     new PlaneGeometry(groundPlane.widthMm, groundPlane.depthMm),
     new MeshBasicMaterial({
@@ -479,12 +523,15 @@ export function OpenScadPreview({
     scene.background = new Color(theme.background);
     sceneRef.current = scene;
 
-    const camera = new PerspectiveCamera(42, 1, 0.1, 3000);
+    const camera = new PerspectiveCamera(42, 1, 0.5, 20000);
     camera.position.set(-118, -116, 92);
     camera.up.set(0, 0, 1);
     cameraRef.current = camera;
 
-    const renderer = new WebGLRenderer({ antialias: true });
+    const renderer = new WebGLRenderer({
+      antialias: true,
+      logarithmicDepthBuffer: true,
+    });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     host.append(renderer.domElement);
 
@@ -498,6 +545,7 @@ export function OpenScadPreview({
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
+    controls.maxDistance = 10000;
     controls.target.set(0, 0, 14);
     controlsRef.current = controls;
     const persistView = () => {

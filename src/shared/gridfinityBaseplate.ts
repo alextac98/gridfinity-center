@@ -1,16 +1,23 @@
 import { formatScadValue, type OpenScadDefineValue } from "./openscad-defines";
+import { GRIDFINITY_GRID_MM } from "./gridfinity/constants";
 
 export type BaseplateAlignment = "near" | "center" | "far";
 export type BaseplateStyle = "default" | "cnclaser";
 export type OversizeMethod = "crop" | "fill";
+export type BaseplateFillMode = "crop" | "grid" | "solid" | "grid-solid";
 export type BuildPlateMode = "disabled" | "enabled" | "unique";
 export type MagnetReleaseMethod = "none" | "slot" | "hole";
 export type ConnectorPosition = "center_wall" | "intersection" | "both";
 export type ConnectorSnapsStyle = "disabled" | "larger" | "smaller";
+export type BaseplateDimensionUnit = "u" | "mm" | "in";
 
 export type GridfinityBaseplateParameters = {
   widthUnits: number;
   depthUnits: number;
+  widthUnit: BaseplateDimensionUnit;
+  depthUnit: BaseplateDimensionUnit;
+  solidUnit: BaseplateDimensionUnit;
+  fillMode: BaseplateFillMode;
   plateStyle: BaseplateStyle;
   oversizeMethod: OversizeMethod;
   positionFillGridX: BaseplateAlignment;
@@ -49,13 +56,17 @@ export type GridfinityBaseplateParameters = {
 export const defaultGridfinityBaseplateParameters: GridfinityBaseplateParameters = {
   widthUnits: 3,
   depthUnits: 2,
+  widthUnit: "u",
+  depthUnit: "u",
+  solidUnit: "u",
+  fillMode: "grid",
   plateStyle: "default",
   oversizeMethod: "fill",
-  positionFillGridX: "near",
-  positionFillGridY: "near",
-  outerWidthUnits: 0,
-  outerDepthUnits: 0,
-  outerHeightMm: 0,
+  positionFillGridX: "center",
+  positionFillGridY: "center",
+  outerWidthUnits: 3,
+  outerDepthUnits: 2,
+  outerHeightMm: 4,
   positionGridInOuterX: "center",
   positionGridInOuterY: "center",
   reducedWallHeightMm: -1,
@@ -84,19 +95,58 @@ export const defaultGridfinityBaseplateParameters: GridfinityBaseplateParameters
   connectorSnapsClearanceMm: 0.2,
 };
 
+function createDimensionTuple(value: number, unit: BaseplateDimensionUnit) {
+  if (unit === "u") {
+    return [value, 0] as const;
+  }
+
+  return [0, unit === "in" ? value * 25.4 : value] as const;
+}
+
+function getDimensionUnits(value: number, unit: BaseplateDimensionUnit) {
+  if (unit === "u") {
+    return value;
+  }
+
+  return (unit === "in" ? value * 25.4 : value) / GRIDFINITY_GRID_MM;
+}
+
+function getSolidFillGridUnits(value: number, unit: BaseplateDimensionUnit) {
+  return Math.max(1, Math.floor(getDimensionUnits(value, unit)));
+}
+
 export function createBaseplateDefines(params: GridfinityBaseplateParameters) {
+  const isSolidFill = params.fillMode === "solid";
+  const isGridSolidFill = params.fillMode === "grid-solid";
+  const width = isSolidFill
+    ? [getSolidFillGridUnits(params.widthUnits, params.widthUnit), 0] as const
+    : createDimensionTuple(params.widthUnits, params.widthUnit);
+  const depth = isSolidFill
+    ? [getSolidFillGridUnits(params.depthUnits, params.depthUnit), 0] as const
+    : createDimensionTuple(params.depthUnits, params.depthUnit);
+  const outerWidth = isSolidFill
+    ? createDimensionTuple(params.widthUnits, params.widthUnit)
+    : isGridSolidFill
+      ? createDimensionTuple(params.outerWidthUnits, params.solidUnit)
+      : [0, 0] as const;
+  const outerDepth = isSolidFill
+    ? createDimensionTuple(params.depthUnits, params.depthUnit)
+    : isGridSolidFill
+      ? createDimensionTuple(params.outerDepthUnits, params.solidUnit)
+      : [0, 0] as const;
+
   return {
     Base_Plate_Options: params.plateStyle,
-    Width: [params.widthUnits, 0],
-    Depth: [params.depthUnits, 0],
-    oversize_method: params.oversizeMethod,
+    Width: width,
+    Depth: depth,
+    oversize_method: params.fillMode === "crop" ? "crop" : "fill",
     position_fill_grid_x: params.positionFillGridX,
     position_fill_grid_y: params.positionFillGridY,
-    outer_Width: [params.outerWidthUnits, 0],
-    outer_Depth: [params.outerDepthUnits, 0],
+    outer_Width: outerWidth,
+    outer_Depth: outerDepth,
     outer_Height: params.outerHeightMm,
-    position_grid_in_outer_x: params.positionGridInOuterX,
-    position_grid_in_outer_y: params.positionGridInOuterY,
+    position_grid_in_outer_x: params.positionFillGridX,
+    position_grid_in_outer_y: params.positionFillGridY,
     Reduced_Wall_Height: params.reducedWallHeightMm,
     Reduced_Wall_Taper: params.reducedWallTaper,
     plate_corner_radius: params.plateCornerRadiusMm,
