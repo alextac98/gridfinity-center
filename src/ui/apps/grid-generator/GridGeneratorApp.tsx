@@ -8,6 +8,8 @@ import {
   createBaseplateScadSnippet,
   defaultGridfinityBaseplateParameters,
   type BaseplateAlignment,
+  type BaseplateDimensionUnit,
+  type BaseplateFillMode,
   type BuildPlateMode,
   type ConnectorPosition,
   type ConnectorSnapsStyle,
@@ -29,8 +31,15 @@ import { measureStlDimensions } from "../openscad/stlDimensions";
 import { useGroundPlanePreference } from "../openscad/useGroundPlanePreference";
 import { useOpenScadModel } from "../openscad/useOpenScadModel";
 import type { GridfinityAppProps } from "../types";
+import { GridBuildPlateSplitControls } from "./GridBuildPlateSplitControls";
 import { GridParametersPanel } from "./GridParametersPanel";
-import { gridNumberFields, type GridNumberField } from "./gridOptions";
+import {
+  convertGridSizeValue,
+  getGridSizeFieldConfig,
+  getSolidSizeFieldConfig,
+  gridNumberFields,
+  type GridNumberField,
+} from "./gridOptions";
 
 const gridSettingsStorageKey = "gridfinity-grid-generator-settings";
 const groundPlaneStorageKey = "gridfinity-grid-generator-ground-plane";
@@ -42,11 +51,13 @@ type StoredGridGeneratorSettings = {
 
 const baseplateStyles = ["default", "cnclaser"] as const;
 const oversizeMethods = ["crop", "fill"] as const;
+const fillModes = ["crop", "grid", "solid", "grid-solid"] as const;
 const alignments = ["near", "center", "far"] as const;
 const buildPlateModes = ["disabled", "enabled", "unique"] as const;
 const magnetReleaseMethods = ["none", "slot", "hole"] as const;
 const connectorPositions = ["center_wall", "intersection", "both"] as const;
 const connectorSnapsStyles = ["disabled", "larger", "smaller"] as const;
+const baseplateDimensionUnits = ["u", "mm", "in"] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -92,6 +103,34 @@ function readNumberField(
   return Math.min(Math.max(value, config.min), config.max);
 }
 
+function readSizeNumberField(
+  value: unknown,
+  fallback: number,
+  unit: BaseplateDimensionUnit,
+) {
+  const config = getGridSizeFieldConfig(unit);
+
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return Math.min(Math.max(value, config.min), config.max);
+}
+
+function readSolidSizeNumberField(
+  value: unknown,
+  fallback: number,
+  unit: BaseplateDimensionUnit,
+) {
+  const config = getSolidSizeFieldConfig(unit);
+
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return Math.min(Math.max(value, config.min), config.max);
+}
+
 function readMagnetSize(value: unknown) {
   const fallback = defaultGridfinityBaseplateParameters.magnetSize;
 
@@ -119,27 +158,61 @@ function parseStoredGridSettings(value: unknown): StoredGridGeneratorSettings {
   const storedDraft = isRecord(value) && isRecord(value.draft)
     ? value.draft
     : {};
+  const widthUnit = readString(
+    storedParams.widthUnit,
+    defaults.widthUnit,
+    baseplateDimensionUnits,
+  ) as BaseplateDimensionUnit;
+  const storedDepthUnit = readString(
+    storedParams.depthUnit,
+    widthUnit,
+    baseplateDimensionUnits,
+  ) as BaseplateDimensionUnit;
+  const storedDepthUnits = readSizeNumberField(
+    storedParams.depthUnits,
+    defaults.depthUnits,
+    storedDepthUnit,
+  );
+  const solidUnit = readString(
+    storedParams.solidUnit,
+    defaults.solidUnit,
+    baseplateDimensionUnits,
+  ) as BaseplateDimensionUnit;
+  const storedOversizeMethod = readString(
+    storedParams.oversizeMethod,
+    defaults.oversizeMethod,
+    oversizeMethods,
+  ) as OversizeMethod;
+  const fillMode = readString(
+    storedParams.fillMode,
+    storedOversizeMethod === "crop" ? "crop" : "grid",
+    fillModes,
+  ) as BaseplateFillMode;
   const params: GridfinityBaseplateParameters = {
     ...defaults,
-    widthUnits: readNumberField(
+    widthUnit,
+    depthUnit: widthUnit,
+    solidUnit,
+    fillMode,
+    widthUnits: readSizeNumberField(
       storedParams.widthUnits,
       defaults.widthUnits,
-      "widthUnits",
+      widthUnit,
     ),
-    depthUnits: readNumberField(
-      storedParams.depthUnits,
+    depthUnits: readSizeNumberField(
+      convertGridSizeValue(storedDepthUnits, storedDepthUnit, widthUnit),
       defaults.depthUnits,
-      "depthUnits",
+      widthUnit,
     ),
-    outerWidthUnits: readNumberField(
+    outerWidthUnits: readSolidSizeNumberField(
       storedParams.outerWidthUnits,
       defaults.outerWidthUnits,
-      "outerWidthUnits",
+      solidUnit,
     ),
-    outerDepthUnits: readNumberField(
+    outerDepthUnits: readSolidSizeNumberField(
       storedParams.outerDepthUnits,
       defaults.outerDepthUnits,
-      "outerDepthUnits",
+      solidUnit,
     ),
     outerHeightMm: readNumberField(
       storedParams.outerHeightMm,
@@ -284,6 +357,18 @@ function parseStoredGridSettings(value: unknown): StoredGridGeneratorSettings {
         : defaults.connectorClipEnabled,
     magnetSize: readMagnetSize(storedParams.magnetSize),
   };
+
+  if (params.fillMode === "grid-solid") {
+    params.outerWidthUnits = Math.max(
+      params.outerWidthUnits,
+      convertGridSizeValue(params.widthUnits, params.widthUnit, params.solidUnit),
+    );
+    params.outerDepthUnits = Math.max(
+      params.outerDepthUnits,
+      convertGridSizeValue(params.depthUnits, params.depthUnit, params.solidUnit),
+    );
+  }
+
   const draft = createDraftFromParams(params);
 
   for (const key of Object.keys(gridNumberFields) as GridNumberField[]) {
@@ -300,11 +385,31 @@ function parseStoredGridSettings(value: unknown): StoredGridGeneratorSettings {
 function readStoredGridSettings(): StoredGridGeneratorSettings {
   const defaults = cloneDefaultGridParameters();
 
-  return readLocalStorageJson(
+  const settings = readLocalStorageJson(
     gridSettingsStorageKey,
     { params: defaults, draft: createDraftFromParams(defaults) },
     parseStoredGridSettings,
   );
+  const buildPlateSettings = readGroundPlaneBuildPlateSettings();
+
+  if (!buildPlateSettings) {
+    return settings;
+  }
+
+  const params = {
+    ...settings.params,
+    buildPlateDepthMm: buildPlateSettings.depthMm,
+    buildPlateWidthMm: buildPlateSettings.widthMm,
+  };
+
+  return {
+    params,
+    draft: {
+      ...settings.draft,
+      buildPlateDepthMm: String(buildPlateSettings.depthMm),
+      buildPlateWidthMm: String(buildPlateSettings.widthMm),
+    },
+  };
 }
 
 function writeStoredGridSettings(
@@ -325,10 +430,59 @@ function createGridAnalyticsProperties(params: GridfinityBaseplateParameters) {
   return {
     width_units: params.widthUnits,
     depth_units: params.depthUnits,
+    width_unit: params.widthUnit,
+    depth_unit: params.depthUnit,
+    fill_mode: params.fillMode,
+    solid_unit: params.solidUnit,
     plate_style: params.plateStyle,
     magnets: params.magnets,
     build_plate_mode: params.buildPlateMode,
   };
+}
+
+function readGroundPlaneBuildPlateSettings() {
+  return readLocalStorageJson(
+    groundPlaneStorageKey,
+    null as { widthMm: number; depthMm: number } | null,
+    (value) => {
+      if (!isRecord(value)) {
+        return null;
+      }
+
+      const width =
+        typeof value.widthMm === "string"
+          ? parseBuildPlateDimension(value.widthMm)
+          : null;
+      const depth =
+        typeof value.depthMm === "string"
+          ? parseBuildPlateDimension(value.depthMm)
+          : null;
+
+      if (width === null || depth === null) {
+        return null;
+      }
+
+      return {
+        depthMm: normalizeBuildPlateDimension(depth, "buildPlateDepthMm"),
+        widthMm: normalizeBuildPlateDimension(width, "buildPlateWidthMm"),
+      };
+    },
+  );
+}
+
+function parseBuildPlateDimension(value: string) {
+  const parsed = Number.parseFloat(value);
+
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function normalizeBuildPlateDimension(
+  value: number,
+  field: "buildPlateWidthMm" | "buildPlateDepthMm",
+) {
+  const config = gridNumberFields[field];
+
+  return Math.round(Math.min(Math.max(value, config.min), config.max));
 }
 
 export function GridGeneratorApp({ accent }: GridfinityAppProps) {
@@ -350,6 +504,60 @@ export function GridGeneratorApp({ accent }: GridfinityAppProps) {
   });
   const groundPlane = useGroundPlanePreference(groundPlaneStorageKey);
 
+  const syncBuildPlateDimension = (
+    value: string,
+    field: "buildPlateWidthMm" | "buildPlateDepthMm",
+  ) => {
+    const parsed = parseBuildPlateDimension(value);
+
+    if (parsed === null) {
+      return;
+    }
+
+    const normalized = normalizeBuildPlateDimension(parsed, field);
+
+    model.clearRenderError();
+    setParams((current) => ({ ...current, [field]: normalized }));
+    setDraft((current) => ({ ...current, [field]: String(normalized) }));
+  };
+
+  const setBuildPlateWidth = (widthMm: string) => {
+    groundPlane.setGroundPlaneWidth(widthMm);
+    syncBuildPlateDimension(widthMm, "buildPlateWidthMm");
+  };
+
+  const setBuildPlateDepth = (depthMm: string) => {
+    groundPlane.setGroundPlaneDepth(depthMm);
+    syncBuildPlateDimension(depthMm, "buildPlateDepthMm");
+  };
+
+  const selectBuildPlatePreset = (
+    preset: Parameters<typeof groundPlane.selectBuildPlatePreset>[0],
+  ) => {
+    groundPlane.selectBuildPlatePreset(preset);
+    model.clearRenderError();
+    setParams((current) => ({
+      ...current,
+      buildPlateDepthMm: normalizeBuildPlateDimension(
+        preset.depthMm,
+        "buildPlateDepthMm",
+      ),
+      buildPlateWidthMm: normalizeBuildPlateDimension(
+        preset.widthMm,
+        "buildPlateWidthMm",
+      ),
+    }));
+    setDraft((current) => ({
+      ...current,
+      buildPlateDepthMm: String(
+        normalizeBuildPlateDimension(preset.depthMm, "buildPlateDepthMm"),
+      ),
+      buildPlateWidthMm: String(
+        normalizeBuildPlateDimension(preset.widthMm, "buildPlateWidthMm"),
+      ),
+    }));
+  };
+
   useEffect(() => {
     writeStoredGridSettings(params, draft);
   }, [draft, params]);
@@ -364,6 +572,27 @@ export function GridGeneratorApp({ accent }: GridfinityAppProps) {
 
   const reset = () => {
     const defaultParams = cloneDefaultGridParameters();
+    const groundPlaneWidth = parseBuildPlateDimension(
+      groundPlane.preference.widthMm,
+    );
+    const groundPlaneDepth = parseBuildPlateDimension(
+      groundPlane.preference.depthMm,
+    );
+
+    if (groundPlaneWidth !== null) {
+      defaultParams.buildPlateWidthMm = normalizeBuildPlateDimension(
+        groundPlaneWidth,
+        "buildPlateWidthMm",
+      );
+    }
+
+    if (groundPlaneDepth !== null) {
+      defaultParams.buildPlateDepthMm = normalizeBuildPlateDimension(
+        groundPlaneDepth,
+        "buildPlateDepthMm",
+      );
+    }
+
     const defaultDraft = createDraftFromParams(defaultParams);
 
     captureEvent("grid_model_reset");
@@ -447,20 +676,27 @@ export function GridGeneratorApp({ accent }: GridfinityAppProps) {
           modelSummary={`${params.widthUnits} x ${params.depthUnits} baseplate`}
           dimensions={dimensions}
           currentModelUrl={model.currentModelUrl}
+          floorMode={groundPlane.preference.floorMode}
           groundPlaneDepthMm={groundPlane.preference.depthMm}
           groundPlaneWidthMm={groundPlane.preference.widthMm}
           isPreviewCurrent={model.isPreviewCurrent}
           selectedBuildPlatePresetName={
             groundPlane.preference.selectedBuildPlatePresetName
           }
-          showGroundPlane={groundPlane.preference.showGroundPlane}
           storageKey="gridfinity-grid-generator-output-action"
           onDownloadStl={model.downloadStl}
           onDownloadScad={model.downloadScad}
-          onGroundPlaneDepthChange={groundPlane.setGroundPlaneDepth}
-          onGroundPlaneWidthChange={groundPlane.setGroundPlaneWidth}
-          onBuildPlatePresetSelect={groundPlane.selectBuildPlatePreset}
-          onShowGroundPlaneChange={groundPlane.setShowGroundPlane}
+          onFloorModeChange={groundPlane.setFloorMode}
+          onGroundPlaneDepthChange={setBuildPlateDepth}
+          onGroundPlaneWidthChange={setBuildPlateWidth}
+          onBuildPlatePresetSelect={selectBuildPlatePreset}
+          extraControls={
+            <GridBuildPlateSplitControls
+              params={params}
+              setParams={setParams}
+              clearRenderError={model.clearRenderError}
+            />
+          }
         />
       }
     />

@@ -17,7 +17,7 @@ export type BuildPlatePreset = {
 };
 
 export type GroundPlanePreference = {
-  showGroundPlane: boolean;
+  floorMode: "grid" | "build-plate";
   widthMm: string;
   depthMm: string;
   selectedBuildPlatePresetName: string;
@@ -31,14 +31,16 @@ function parseGroundPlaneDimension(value: string) {
 
 function parseGroundPlanePreference(value: unknown): GroundPlanePreference {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {
-      showGroundPlane: false,
+      return {
+      floorMode: "grid",
       selectedBuildPlatePresetName: "",
       ...defaultGroundPlaneDraft,
     };
   }
 
-  const preference = value as Partial<GroundPlanePreference>;
+  const preference = value as Partial<GroundPlanePreference> & {
+    showGroundPlane?: unknown;
+  };
   const widthMm =
     typeof preference.widthMm === "string" &&
     parseGroundPlaneDimension(preference.widthMm) !== null
@@ -51,7 +53,12 @@ function parseGroundPlanePreference(value: unknown): GroundPlanePreference {
       : defaultGroundPlaneDraft.depthMm;
 
   return {
-    showGroundPlane: preference.showGroundPlane === true,
+    floorMode:
+      preference.floorMode === "grid" || preference.floorMode === "build-plate"
+        ? preference.floorMode
+        : preference.showGroundPlane === true
+          ? "build-plate"
+          : "grid",
     selectedBuildPlatePresetName:
       typeof preference.selectedBuildPlatePresetName === "string"
         ? preference.selectedBuildPlatePresetName
@@ -79,7 +86,8 @@ export function useGroundPlanePreference(storageKey: string) {
     const depthMm = parseGroundPlaneDimension(preference.depthMm);
 
     return {
-      visible: preference.showGroundPlane && widthMm !== null && depthMm !== null,
+      mode: preference.floorMode,
+      visible: widthMm !== null && depthMm !== null,
       printerName: preference.selectedBuildPlatePresetName,
       widthMm: widthMm ?? 250,
       depthMm: depthMm ?? 250,
@@ -87,7 +95,7 @@ export function useGroundPlanePreference(storageKey: string) {
   }, [
     preference.depthMm,
     preference.selectedBuildPlatePresetName,
-    preference.showGroundPlane,
+    preference.floorMode,
     preference.widthMm,
   ]);
 
@@ -116,10 +124,10 @@ export function useGroundPlanePreference(storageKey: string) {
     }));
   };
 
-  const setShowGroundPlane = (showGroundPlane: boolean) => {
+  const setFloorMode = (floorMode: GroundPlanePreference["floorMode"]) => {
     setPreference((current) => ({
       ...current,
-      showGroundPlane,
+      floorMode,
     }));
   };
 
@@ -129,6 +137,6 @@ export function useGroundPlanePreference(storageKey: string) {
     selectBuildPlatePreset,
     setGroundPlaneDepth,
     setGroundPlaneWidth,
-    setShowGroundPlane,
+    setFloorMode,
   };
 }

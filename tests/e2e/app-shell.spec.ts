@@ -191,8 +191,41 @@ test("renders the grid generator and persists grid settings", async ({ page }) =
     page.getByRole("heading", { level: 2, name: "Model Output" }),
   ).toBeVisible();
 
-  await page.getByRole("spinbutton", { name: "Width u" }).fill("4");
-  await page.getByRole("spinbutton", { name: "Width u" }).blur();
+  await page.getByRole("spinbutton", { name: "Grid Width u" }).fill("4");
+  await page.getByRole("spinbutton", { name: "Grid Width u" }).blur();
+  await page
+    .getByRole("group", { name: "Size unit" })
+    .getByRole("button", { name: "mm" })
+    .click();
+  await expect(
+    page.getByRole("spinbutton", { name: "Grid Width mm" }),
+  ).toHaveValue("168");
+  await expect(
+    page.getByRole("spinbutton", { name: "Grid Depth mm" }),
+  ).toHaveValue("84");
+  await page.getByLabel("Fill Mode").selectOption({ label: "Grid + Solid" });
+  await expect(page.getByRole("spinbutton", { name: "Solid Width u" })).toHaveAttribute(
+    "min",
+    "4",
+  );
+  await expect(page.getByRole("spinbutton", { name: "Solid Depth u" })).toHaveAttribute(
+    "min",
+    "2",
+  );
+  await page.getByRole("spinbutton", { name: "Solid Width u" }).fill("5");
+  await page.getByRole("spinbutton", { name: "Solid Width u" }).blur();
+  await page.getByRole("spinbutton", { name: "Solid Depth u" }).fill("3");
+  await page.getByRole("spinbutton", { name: "Solid Depth u" }).blur();
+  await page
+    .getByRole("group", { name: "Solid size unit" })
+    .getByRole("button", { name: "mm" })
+    .click();
+  await expect(
+    page.getByRole("spinbutton", { name: "Solid Width mm" }),
+  ).toHaveValue("210");
+  await expect(
+    page.getByRole("spinbutton", { name: "Solid Depth mm" }),
+  ).toHaveValue("126");
 
   await expect
     .poll(async () =>
@@ -200,11 +233,30 @@ test("renders the grid generator and persists grid settings", async ({ page }) =
         const storedSettings = window.localStorage.getItem(
           "gridfinity-grid-generator-settings",
         );
+        const parsed = storedSettings ? JSON.parse(storedSettings) : null;
 
-        return storedSettings ? JSON.parse(storedSettings).params.widthUnits : 0;
+        return parsed
+          ? {
+              depthUnit: parsed.params.depthUnit,
+              depthUnits: parsed.params.depthUnits,
+              fillMode: parsed.params.fillMode,
+              solidUnit: parsed.params.solidUnit,
+              solidWidth: parsed.params.outerWidthUnits,
+              widthUnit: parsed.params.widthUnit,
+              widthUnits: parsed.params.widthUnits,
+            }
+          : null;
       }),
     )
-    .toBe(4);
+    .toEqual({
+      depthUnit: "mm",
+      depthUnits: 84,
+      fillMode: "grid-solid",
+      solidUnit: "mm",
+      solidWidth: 210,
+      widthUnit: "mm",
+      widthUnits: 168,
+    });
 
   await page
     .getByLabel("Grid Parameters")

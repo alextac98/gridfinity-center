@@ -370,20 +370,20 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
           modelSummary={`${params.widthUnits} x ${params.depthUnits} x ${params.heightUnits} bin`}
           dimensions={dimensions}
           currentModelUrl={model.currentModelUrl}
+          floorMode={groundPlane.preference.floorMode}
           groundPlaneDepthMm={groundPlane.preference.depthMm}
           groundPlaneWidthMm={groundPlane.preference.widthMm}
           isPreviewCurrent={model.isPreviewCurrent}
           selectedBuildPlatePresetName={
             groundPlane.preference.selectedBuildPlatePresetName
           }
-          showGroundPlane={groundPlane.preference.showGroundPlane}
           storageKey="gridfinity-bin-generator-output-action"
           onDownloadStl={model.downloadStl}
           onDownloadScad={model.downloadScad}
+          onFloorModeChange={groundPlane.setFloorMode}
           onGroundPlaneDepthChange={groundPlane.setGroundPlaneDepth}
           onGroundPlaneWidthChange={groundPlane.setGroundPlaneWidth}
           onBuildPlatePresetSelect={groundPlane.selectBuildPlatePreset}
-          onShowGroundPlaneChange={groundPlane.setShowGroundPlane}
         />
       }
     />

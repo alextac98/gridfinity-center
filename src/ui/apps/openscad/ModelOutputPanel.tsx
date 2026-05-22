@@ -8,6 +8,7 @@ import {
   PanelLeft,
   Printer,
 } from "lucide-react";
+import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { captureEvent } from "@/ui/analytics/posthog";
 import { useToast } from "@/ui/shell/ToastProvider";
@@ -46,15 +47,16 @@ type ModelOutputPanelProps = {
   currentModelUrl: string;
   groundPlaneDepthMm: string;
   groundPlaneWidthMm: string;
+  floorMode: "grid" | "build-plate";
   isPreviewCurrent: boolean;
   selectedBuildPlatePresetName: string;
-  showGroundPlane: boolean;
   onBuildPlatePresetSelect: (preset: BuildPlatePreset) => void;
   onDownloadStl: () => void;
   onDownloadScad: () => void;
+  onFloorModeChange: (mode: "grid" | "build-plate") => void;
   onGroundPlaneDepthChange: (value: string) => void;
   onGroundPlaneWidthChange: (value: string) => void;
-  onShowGroundPlaneChange: (showGroundPlane: boolean) => void;
+  extraControls?: ReactNode;
   storageKey: string;
 };
 
@@ -160,15 +162,16 @@ export function ModelOutputPanel({
   currentModelUrl,
   groundPlaneDepthMm,
   groundPlaneWidthMm,
+  floorMode,
   isPreviewCurrent,
   selectedBuildPlatePresetName,
-  showGroundPlane,
   onBuildPlatePresetSelect,
   onDownloadStl,
   onDownloadScad,
+  onFloorModeChange,
   onGroundPlaneDepthChange,
   onGroundPlaneWidthChange,
-  onShowGroundPlaneChange,
+  extraControls,
   storageKey,
 }: ModelOutputPanelProps) {
   const { showToast } = useToast();
@@ -214,7 +217,7 @@ export function ModelOutputPanel({
   }, [isOutputMenuOpen]);
 
   useEffect(() => {
-    if (!showGroundPlane || !isBuildPlatePresetMenuOpen) {
+    if (!isBuildPlatePresetMenuOpen) {
       return;
     }
 
@@ -236,7 +239,7 @@ export function ModelOutputPanel({
       window.removeEventListener("mousedown", closeOnOutsidePointer);
       window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [isBuildPlatePresetMenuOpen, showGroundPlane]);
+  }, [isBuildPlatePresetMenuOpen]);
 
   const selectedSlicerLauncher = slicerLaunchers.find(
     (launcher) => launcher.id === selectedOutputAction,
@@ -350,22 +353,35 @@ export function ModelOutputPanel({
         </div>
 
         <div className={styles.groundPlaneControls}>
-          <label className={styles.booleanControl}>
-            <input
-              checked={showGroundPlane}
-              onChange={(event) =>
-                onShowGroundPlaneChange(event.target.checked)
-              }
-              type="checkbox"
-            />
-            <strong>Show ground plane</strong>
-          </label>
+          <div className={styles.field}>
+            <span>Preview Floor</span>
+            <div
+              aria-label="Preview floor"
+              className={`${styles.unitSwitch} ${styles.floorSwitch}`}
+              role="group"
+            >
+              <button
+                aria-pressed={floorMode === "grid"}
+                className={floorMode === "grid" ? styles.unitButtonActive : ""}
+                onClick={() => onFloorModeChange("grid")}
+                type="button"
+              >
+                Grid
+              </button>
+              <button
+                aria-pressed={floorMode === "build-plate"}
+                className={
+                  floorMode === "build-plate" ? styles.unitButtonActive : ""
+                }
+                onClick={() => onFloorModeChange("build-plate")}
+                type="button"
+              >
+                Build Plate
+              </button>
+            </div>
+          </div>
 
-          <div
-            className={`${styles.field} ${
-              showGroundPlane ? "" : styles.fieldDisabled
-            }`}
-          >
+          <div className={styles.field}>
             <div className={styles.buildPlateSizeRow}>
               <div className={styles.tupleGrid}>
                 <label className={styles.tupleItem}>
@@ -373,7 +389,6 @@ export function ModelOutputPanel({
                   <div className={styles.inputWrap}>
                     <input
                       aria-label="Ground plane width"
-                      disabled={!showGroundPlane}
                       min="1"
                       onChange={(event) =>
                         onGroundPlaneWidthChange(event.target.value)
@@ -391,7 +406,6 @@ export function ModelOutputPanel({
                   <div className={styles.inputWrap}>
                     <input
                       aria-label="Ground plane depth"
-                      disabled={!showGroundPlane}
                       min="1"
                       onChange={(event) =>
                         onGroundPlaneDepthChange(event.target.value)
@@ -410,11 +424,10 @@ export function ModelOutputPanel({
                 ref={buildPlatePresetMenuRef}
               >
                 <button
-                  aria-expanded={showGroundPlane && isBuildPlatePresetMenuOpen}
+                  aria-expanded={isBuildPlatePresetMenuOpen}
                   aria-haspopup="menu"
                   aria-label="Choose build plate preset"
                   className={styles.buildPlatePresetButton}
-                  disabled={!showGroundPlane}
                   onClick={() =>
                     setIsBuildPlatePresetMenuOpen((current) => !current)
                   }
@@ -425,7 +438,7 @@ export function ModelOutputPanel({
                   <ChevronUp aria-hidden="true" size={14} />
                 </button>
 
-                {showGroundPlane && isBuildPlatePresetMenuOpen ? (
+                {isBuildPlatePresetMenuOpen ? (
                   <div className={styles.buildPlatePresetMenu} role="menu">
                     {buildPlatePresets.map((preset) => {
                       const isSelected = isBuildPlatePresetSelected(preset);
@@ -452,10 +465,13 @@ export function ModelOutputPanel({
                     })}
                   </div>
                 ) : null}
-              </div>
             </div>
           </div>
+
+          {extraControls}
         </div>
+      </div>
+
       </div>
 
       <div className={styles.panelActions}>
