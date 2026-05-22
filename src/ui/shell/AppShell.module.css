@@ -304,6 +304,11 @@
   height: 48px;
 }
 
+.collapsedSidebar .themeUtilityButton {
+  width: 48px;
+  height: 42px;
+}
+
 .collapsedSidebar .secondaryUtilityButton {
   display: none;
 }
