@@ -16,14 +16,17 @@ import {
   Group,
   LineBasicMaterial,
   LineSegments,
+  LinearFilter,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  Object3D,
   OrthographicCamera,
   PlaneGeometry,
   PerspectiveCamera,
   Raycaster,
   Scene,
+  SRGBColorSpace,
   Vector3,
   Vector2,
   WebGLRenderer,
@@ -82,6 +85,8 @@ type StoredPreviewView = {
   up: [number, number, number];
 };
 
+type OrientationTarget = OrientationView | Vector3;
+
 const orientationDirections: Record<OrientationView, Vector3> = {
   home: new Vector3(-1.1, -1.25, 0.85).normalize(),
   top: new Vector3(0, 0, 1),
@@ -91,6 +96,67 @@ const orientationDirections: Record<OrientationView, Vector3> = {
   right: new Vector3(1, 0, 0),
   left: new Vector3(-1, 0, 0),
 };
+
+const orientationFaces = [
+  {
+    label: "RIGHT",
+    view: "right",
+    normal: new Vector3(1, 0, 0),
+    color: "orientationSideAlt",
+    labelRoll: -Math.PI / 2,
+    labelRotation: Math.PI,
+  },
+  {
+    label: "LEFT",
+    view: "left",
+    normal: new Vector3(-1, 0, 0),
+    color: "orientationSideAlt",
+    labelRoll: Math.PI / 2,
+    labelRotation: 0,
+  },
+  {
+    label: "BACK",
+    view: "back",
+    normal: new Vector3(0, 1, 0),
+    color: "orientationSide",
+    labelRoll: 0,
+    labelRotation: Math.PI,
+  },
+  {
+    label: "FRONT",
+    view: "front",
+    normal: new Vector3(0, -1, 0),
+    color: "orientationSide",
+    labelRoll: 0,
+    labelRotation: 0,
+  },
+  {
+    label: "TOP",
+    view: "top",
+    normal: new Vector3(0, 0, 1),
+    color: "orientationTop",
+    labelRoll: 0,
+    labelRotation: 0,
+  },
+  {
+    label: "BOTTOM",
+    view: "bottom",
+    normal: new Vector3(0, 0, -1),
+    color: "orientationBottom",
+    labelRoll: 0,
+    labelRotation: Math.PI,
+  },
+] as const satisfies readonly {
+  label: string;
+  view: OrientationView;
+  normal: Vector3;
+  color: keyof Pick<
+    PreviewTheme,
+    "orientationTop" | "orientationSide" | "orientationSideAlt" | "orientationBottom"
+  >;
+  labelRoll?: number;
+  labelRotation?: number;
+}[];
 
 function getPreviewTheme(element: HTMLElement): PreviewTheme {
   const style = window.getComputedStyle(element);
@@ -170,10 +236,15 @@ function writeStoredPreviewView(
   );
 }
 
-function createLabelTexture(text: string, background: string, theme: PreviewTheme) {
+function createLabelTexture(
+  text: string,
+  background: string,
+  theme: PreviewTheme,
+  rotation = 0,
+) {
   const canvas = document.createElement("canvas");
-  canvas.width = 512;
-  canvas.height = 512;
+  canvas.width = 768;
+  canvas.height = 256;
   const context = canvas.getContext("2d");
 
   if (!context) {
@@ -182,52 +253,190 @@ function createLabelTexture(text: string, background: string, theme: PreviewThem
 
   context.fillStyle = background;
   context.fillRect(0, 0, canvas.width, canvas.height);
-  context.strokeStyle = theme.orientationStroke;
-  context.lineWidth = 12;
-  context.strokeRect(6, 6, canvas.width - 12, canvas.height - 12);
   context.fillStyle = theme.orientationText;
-  context.font = "bold 92px Arial, sans-serif";
+  context.font = "900 168px Arial, sans-serif";
   context.textAlign = "center";
   context.textBaseline = "middle";
-  context.fillText(text, canvas.width / 2, canvas.height / 2);
+  context.translate(canvas.width / 2, canvas.height / 2);
+  context.rotate(rotation);
+  context.fillText(text, 0, 0);
 
   const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  texture.minFilter = LinearFilter;
+  texture.magFilter = LinearFilter;
   texture.needsUpdate = true;
   return texture;
 }
 
-function createOrientationScene(theme: PreviewTheme) {
-  const scene = new Scene();
-  const cube = new Mesh(
-    new BoxGeometry(1.45, 1.45, 1.45),
-    [
-      new MeshBasicMaterial({ map: createLabelTexture("RIGHT", theme.orientationSideAlt, theme) }),
-      new MeshBasicMaterial({ map: createLabelTexture("LEFT", theme.orientationSideAlt, theme) }),
-      new MeshBasicMaterial({ map: createLabelTexture("BACK", theme.orientationSide, theme) }),
-      new MeshBasicMaterial({ map: createLabelTexture("FRONT", theme.orientationSide, theme) }),
-      new MeshBasicMaterial({ map: createLabelTexture("TOP", theme.orientationTop, theme) }),
-      new MeshBasicMaterial({ map: createLabelTexture("BOTTOM", theme.orientationBottom, theme) }),
-    ],
-  );
-  scene.add(cube);
+function createOrientationLabel(
+  label: string,
+  normal: Vector3,
+  background: string,
+  theme: PreviewTheme,
+  labelRoll = 0,
+  labelRotation = 0,
+) {
+  const material = new MeshBasicMaterial({
+    map: createLabelTexture(label, background, theme, labelRotation),
+    depthWrite: false,
+  });
+  const labelMesh = new Mesh(new PlaneGeometry(1.08, 0.42), material);
+  labelMesh.position.copy(normal).multiplyScalar(0.731);
 
-  return { scene, cube };
+  if (normal.x > 0) {
+    labelMesh.rotation.y = Math.PI / 2;
+    labelMesh.rotation.x = labelRoll;
+  } else if (normal.x < 0) {
+    labelMesh.rotation.y = -Math.PI / 2;
+    labelMesh.rotation.x = labelRoll;
+  } else if (normal.y > 0) {
+    labelMesh.rotation.x = -Math.PI / 2;
+  } else if (normal.y < 0) {
+    labelMesh.rotation.x = Math.PI / 2;
+  } else if (normal.z < 0) {
+    labelMesh.rotation.y = Math.PI;
+  }
+
+  labelMesh.renderOrder = 10;
+  labelMesh.userData.viewerRole = "orientationLabel";
+  labelMesh.userData.label = label;
+  labelMesh.userData.themeColor = background;
+
+  return labelMesh;
 }
 
-function getCubeFaceView(normal: Vector3): OrientationView {
-  const absX = Math.abs(normal.x);
-  const absY = Math.abs(normal.y);
-  const absZ = Math.abs(normal.z);
+function createOrientationHitTarget(direction: Vector3, size: Vector3) {
+  const target = new Mesh(
+    new BoxGeometry(size.x, size.y, size.z),
+    new MeshBasicMaterial({
+      color: 0x2f7569,
+      opacity: 0,
+      transparent: true,
+      depthWrite: false,
+    }),
+  );
+  target.position.copy(direction).multiplyScalar(0.72);
+  target.userData.viewerRole = "orientationHitTarget";
+  target.userData.direction = direction.clone().normalize();
+  target.userData.hoverOpacity = 0.7;
 
-  if (absX >= absY && absX >= absZ) {
-    return normal.x > 0 ? "right" : "left";
+  return target;
+}
+
+function createOrientationScene(theme: PreviewTheme) {
+  const scene = new Scene();
+  const faceMaterials = orientationFaces.map(
+    (face) =>
+      new MeshBasicMaterial({
+        color: theme[face.color],
+      }),
+  );
+  const cube = new Mesh(
+    new BoxGeometry(1.45, 1.45, 1.45),
+    faceMaterials,
+  );
+  cube.userData.viewerRole = "orientationCube";
+  scene.add(cube);
+
+  const outline = new LineSegments(
+    new EdgesGeometry(cube.geometry),
+    new LineBasicMaterial({
+      color: theme.orientationStroke,
+      transparent: true,
+      opacity: 0.82,
+    }),
+  );
+  outline.userData.viewerRole = "orientationOutline";
+  scene.add(outline);
+
+  const labels = new Group();
+  for (const face of orientationFaces) {
+    labels.add(
+      createOrientationLabel(
+        face.label,
+        face.normal,
+        theme[face.color],
+        theme,
+        face.labelRoll,
+        face.labelRotation,
+      ),
+    );
+  }
+  scene.add(labels);
+
+  const hitTargets = new Group();
+  const cornerSize = 0.42;
+  const edgeThickness = 0.34;
+  const faceSize = 0.78;
+
+  for (const face of orientationFaces) {
+    const size = new Vector3(faceSize, faceSize, faceSize);
+    if (face.normal.x !== 0) {
+      size.set(0.28, faceSize, faceSize);
+    } else if (face.normal.y !== 0) {
+      size.set(faceSize, 0.28, faceSize);
+    } else {
+      size.set(faceSize, faceSize, 0.28);
+    }
+    const target = createOrientationHitTarget(face.normal, size);
+    target.userData.view = face.view;
+    hitTargets.add(target);
   }
 
-  if (absY >= absX && absY >= absZ) {
-    return normal.y > 0 ? "back" : "front";
+  for (const x of [-1, 1]) {
+    for (const y of [-1, 1]) {
+      hitTargets.add(
+        createOrientationHitTarget(
+          new Vector3(x, y, 0),
+          new Vector3(edgeThickness, edgeThickness, 0.76),
+        ),
+      );
+
+      hitTargets.add(
+        createOrientationHitTarget(
+          new Vector3(x, 0, y),
+          new Vector3(edgeThickness, 0.76, edgeThickness),
+        ),
+      );
+
+      hitTargets.add(
+        createOrientationHitTarget(
+          new Vector3(0, x, y),
+          new Vector3(0.76, edgeThickness, edgeThickness),
+        ),
+      );
+    }
   }
 
-  return normal.z > 0 ? "top" : "bottom";
+  for (const x of [-1, 1]) {
+    for (const y of [-1, 1]) {
+      for (const z of [-1, 1]) {
+        hitTargets.add(
+          createOrientationHitTarget(
+            new Vector3(x, y, z),
+            new Vector3(cornerSize, cornerSize, cornerSize),
+          ),
+        );
+      }
+    }
+  }
+
+  scene.add(hitTargets);
+
+  return { scene, cube, outline, labels, hitTargets };
+}
+
+function getOrientationTarget(object: Object3D): OrientationTarget | null {
+  if (typeof object.userData.view === "string") {
+    return object.userData.view as OrientationView;
+  }
+
+  if (object.userData.direction instanceof Vector3) {
+    return object.userData.direction;
+  }
+
+  return null;
 }
 
 function createStlMesh(bytes: Uint8Array, theme: PreviewTheme) {
@@ -486,7 +695,7 @@ export function OpenScadPreview({
     onModelVisibleRef.current = onModelVisible;
   }, [onModelVisible]);
 
-  const snapToView = useCallback((view: OrientationView) => {
+  const snapToView = useCallback((target: OrientationTarget) => {
     const camera = cameraRef.current;
     const controls = controlsRef.current;
 
@@ -496,11 +705,16 @@ export function OpenScadPreview({
 
     const center = modelCenterRef.current;
     const distance = Math.max(modelRadiusRef.current * 2.45, 92);
-    const direction = orientationDirections[view];
+    const direction =
+      target instanceof Vector3 ? target.clone().normalize() : orientationDirections[target];
     camera.position.copy(center).addScaledVector(direction, distance);
     camera.up.set(0, 0, 1);
 
-    if (view === "top" || view === "bottom") {
+    if (
+      target === "top" ||
+      target === "bottom" ||
+      (target instanceof Vector3 && Math.abs(direction.z) > 0.72)
+    ) {
       camera.up.set(0, 1, 0);
     }
 
@@ -537,7 +751,7 @@ export function OpenScadPreview({
 
     const orientationCamera = new OrthographicCamera(-1.85, 1.85, 1.85, -1.85, 0.1, 20);
     const orientationRenderer = new WebGLRenderer({ alpha: true, antialias: true });
-    orientationRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    orientationRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 3));
     orientationHost.append(orientationRenderer.domElement);
     const orientationScene = createOrientationScene(theme);
     const raycaster = new Raycaster();
@@ -625,23 +839,50 @@ export function OpenScadPreview({
       const cubeMaterials = Array.isArray(orientationScene.cube.material)
         ? orientationScene.cube.material
         : [orientationScene.cube.material];
-      const faceThemes = [
-        ["RIGHT", nextTheme.orientationSideAlt],
-        ["LEFT", nextTheme.orientationSideAlt],
-        ["BACK", nextTheme.orientationSide],
-        ["FRONT", nextTheme.orientationSide],
-        ["TOP", nextTheme.orientationTop],
-        ["BOTTOM", nextTheme.orientationBottom],
-      ] as const;
 
       cubeMaterials.forEach((material, index) => {
         if (!(material instanceof MeshBasicMaterial)) {
           return;
         }
 
+        const face = orientationFaces[index];
+        if (!face) {
+          return;
+        }
+
+        material.color.set(nextTheme[face.color]);
+        material.needsUpdate = true;
+      });
+
+      if (orientationScene.outline.material instanceof LineBasicMaterial) {
+        orientationScene.outline.material.color.set(nextTheme.orientationStroke);
+      }
+
+      orientationScene.labels.children.forEach((labelObject, index) => {
+        if (!(labelObject instanceof Mesh)) {
+          return;
+        }
+
+        const material = Array.isArray(labelObject.material)
+          ? labelObject.material[0]
+          : labelObject.material;
+
+        if (!(material instanceof MeshBasicMaterial)) {
+          return;
+        }
+
+        const face = orientationFaces[index];
+        if (!face) {
+          return;
+        }
+
         material.map?.dispose();
-        const [label, color] = faceThemes[index];
-        material.map = createLabelTexture(label, color, nextTheme);
+        material.map = createLabelTexture(
+          String(labelObject.userData.label ?? ""),
+          nextTheme[face.color],
+          nextTheme,
+          face.labelRotation,
+        );
         material.needsUpdate = true;
       });
     };
@@ -676,18 +917,67 @@ export function OpenScadPreview({
       orientationCamera.lookAt(0, 0, 0);
     };
 
-    const handleOrientationPointerDown = (event: PointerEvent) => {
+    let hoveredOrientationTarget: Mesh | null = null;
+
+    const setHoveredOrientationTarget = (target: Mesh | null) => {
+      if (hoveredOrientationTarget === target) {
+        return;
+      }
+
+      if (hoveredOrientationTarget) {
+        const material = hoveredOrientationTarget.material;
+        if (material instanceof MeshBasicMaterial) {
+          material.opacity = 0;
+        }
+      }
+
+      hoveredOrientationTarget = target;
+      orientationRenderer.domElement.style.cursor = target ? "pointer" : "default";
+
+      if (hoveredOrientationTarget) {
+        const material = hoveredOrientationTarget.material;
+        if (material instanceof MeshBasicMaterial) {
+          material.opacity =
+            typeof hoveredOrientationTarget.userData.hoverOpacity === "number"
+              ? hoveredOrientationTarget.userData.hoverOpacity
+              : 0.24;
+        }
+      }
+    };
+
+    const getOrientationPointerTarget = (event: PointerEvent) => {
       const rect = orientationRenderer.domElement.getBoundingClientRect();
       pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       pointer.y = -(((event.clientY - rect.top) / rect.height) * 2 - 1);
       raycaster.setFromCamera(pointer, orientationCamera);
-      const [hit] = raycaster.intersectObject(orientationScene.cube, false);
+      const [hit] = raycaster.intersectObjects(orientationScene.hitTargets.children, false);
 
-      if (hit?.face) {
-        snapToView(getCubeFaceView(hit.face.normal));
+      if (!hit?.object || !(hit.object instanceof Mesh)) {
+        return null;
+      }
+
+      return hit.object;
+    };
+
+    const handleOrientationPointerMove = (event: PointerEvent) => {
+      setHoveredOrientationTarget(getOrientationPointerTarget(event));
+    };
+
+    const handleOrientationPointerLeave = () => {
+      setHoveredOrientationTarget(null);
+    };
+
+    const handleOrientationPointerDown = (event: PointerEvent) => {
+      const target = getOrientationPointerTarget(event);
+      const orientationTarget = target ? getOrientationTarget(target) : null;
+
+      if (orientationTarget) {
+        snapToView(orientationTarget);
       }
     };
 
+    orientationRenderer.domElement.addEventListener("pointermove", handleOrientationPointerMove);
+    orientationRenderer.domElement.addEventListener("pointerleave", handleOrientationPointerLeave);
     orientationRenderer.domElement.addEventListener("pointerdown", handleOrientationPointerDown);
 
     let frame = 0;
@@ -713,6 +1003,8 @@ export function OpenScadPreview({
       renderer.dispose();
       orientationRenderer.dispose();
       renderer.domElement.remove();
+      orientationRenderer.domElement.removeEventListener("pointermove", handleOrientationPointerMove);
+      orientationRenderer.domElement.removeEventListener("pointerleave", handleOrientationPointerLeave);
       orientationRenderer.domElement.removeEventListener("pointerdown", handleOrientationPointerDown);
       orientationRenderer.domElement.remove();
       scene.clear();
@@ -878,7 +1170,11 @@ export function OpenScadPreview({
         >
           <Home aria-hidden="true" size={18} />
         </button>
-        <div ref={orientationHostRef} className={styles.orientationCanvas} />
+        <div
+          ref={orientationHostRef}
+          className={styles.orientationCanvas}
+          title="Click a face, edge, or corner to change view"
+        />
       </div>
     </div>
   );
