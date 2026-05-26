@@ -582,8 +582,38 @@
   background: var(--hover);
 }
 
-.aboutCredit {
+.aboutBuildInfo {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
   margin: auto 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 620;
+  line-height: 1.4;
+}
+
+.aboutBuildInfo div {
+  display: flex;
+  gap: 5px;
+}
+
+.aboutBuildInfo dt {
+  color: var(--muted);
+}
+
+.aboutBuildInfo dd {
+  margin: 0;
+  color: var(--text-soft);
+}
+
+.aboutBuildInfo a {
+  color: var(--brand-accent);
+  font-weight: 760;
+}
+
+.aboutCredit {
+  margin: 0;
   font-size: 12px;
   text-align: center;
 }
