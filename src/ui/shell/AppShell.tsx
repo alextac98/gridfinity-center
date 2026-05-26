@@ -1,7 +1,9 @@
 "use client";
 
 import {
+  BadgeInfo,
   Boxes,
+  Copyright,
   Info,
   Moon,
   PanelLeftClose,
@@ -91,6 +93,25 @@ function getStatusBadgeClassName(
     .join(" ");
 }
 
+type InfoSectionId = "about" | "attributions";
+
+const infoSections = [
+  {
+    id: "about",
+    label: "About",
+    icon: BadgeInfo,
+  },
+  {
+    id: "attributions",
+    label: "Attributions",
+    icon: Copyright,
+  },
+] as const satisfies readonly {
+  id: InfoSectionId;
+  label: string;
+  icon: typeof Info;
+}[];
+
 function AppWorkspacePanel({
   app,
   isActive,
@@ -147,6 +168,8 @@ export function AppShell() {
   const activeAppId = getActiveAppId(pathname);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
+  const [activeInfoSection, setActiveInfoSection] =
+    useState<InfoSectionId>("about");
   const [visitedAppIds, setVisitedAppIds] = useState<RegisteredAppId[]>(() => [
     activeAppId,
   ]);
@@ -331,57 +354,187 @@ export function AppShell() {
             onClick={(event) => event.stopPropagation()}
             role="dialog"
           >
-            <div className={styles.aboutHeader}>
-              <h2 id="about-title">Gridfinity Center</h2>
-              <button
-                aria-label="Close about"
-                className={styles.aboutCloseButton}
-                onClick={() => setIsAboutOpen(false)}
-                type="button"
-              >
-                <X aria-hidden="true" size={18} />
-              </button>
-            </div>
-            <p>
-              A browser-based workspace for generating Gridfinity and related
-              projects. Powered by{" "}
-              <a
-                className={styles.aboutSourceLink}
-                href="https://openscad.org"
-                rel="noreferrer"
-                target="_blank"
-              >
-                OpenSCAD
-              </a>
-              and{" "}
-              <a
-                className={styles.aboutSourceLink}
-                href="https://threejs.org"
-                rel="noreferrer"
-                target="_blank"
-              >
-                three.js
-              </a>
-            </p>
-            <p>
-              Models are generated locally in the browser, with cloud caching
-              for faster repeat downloads and slicer handoff.
-            </p>
-            <a
-              className={styles.aboutSourceLink}
-              href="https://github.com/alextac98/gridfinity-viewer"
-              rel="noreferrer"
-              target="_blank"
+            <aside
+              aria-label="Project info sections"
+              className={styles.aboutSidebar}
             >
-              View source on GitHub
-            </a>
-            <p className={styles.aboutCredit}>
-              Made with &hearts; by{" "}
-              <a href="https://alextac.com" rel="noreferrer" target="_blank">
-                Alex Tacescu
-              </a>{" "}
-              &copy; {currentYear}
-            </p>
+              <div className={styles.aboutSidebarHeader}>
+                <Boxes aria-hidden="true" size={22} />
+                <span>Gridfinity Center</span>
+              </div>
+              <nav className={styles.aboutTabs} role="tablist">
+                {infoSections.map((section) => {
+                  const SectionIcon = section.icon;
+                  const isActive = section.id === activeInfoSection;
+
+                  return (
+                    <button
+                      aria-controls={`${section.id}-info-panel`}
+                      aria-selected={isActive}
+                      className={
+                        isActive ? styles.activeAboutTab : styles.aboutTab
+                      }
+                      id={`${section.id}-info-tab`}
+                      key={section.id}
+                      onClick={() => setActiveInfoSection(section.id)}
+                      role="tab"
+                      type="button"
+                    >
+                      <SectionIcon aria-hidden="true" size={17} />
+                      <span>{section.label}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+            </aside>
+
+            <div className={styles.aboutContent}>
+              <div className={styles.aboutHeader}>
+                <div>
+                  <h2 id="about-title">
+                    {activeInfoSection === "about"
+                      ? "About Gridfinity Center"
+                      : "Attributions"}
+                  </h2>
+                </div>
+                <button
+                  aria-label="Close about"
+                  className={styles.aboutCloseButton}
+                  onClick={() => setIsAboutOpen(false)}
+                  type="button"
+                >
+                  <X aria-hidden="true" size={18} />
+                </button>
+              </div>
+
+              <section
+                aria-labelledby="about-info-tab"
+                className={styles.aboutPanel}
+                hidden={activeInfoSection !== "about"}
+                id="about-info-panel"
+                role="tabpanel"
+              >
+                <div className={styles.aboutGroup}>
+                  <p>
+                    Gridfinity Center is a browser-based workspace for
+                    generating Gridfinity bins, grids, and (soon) labels, with a
+                    strong focus on user experience. I was inspired by apps like{" "}
+                    <a
+                      href="https://gridfinity.perplexinglabs.com"
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      Perplexing Labs Gridfinity Generator
+                    </a>
+                    ,{" "}
+                    <a
+                      href="https://gridfinitylabels.com"
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      Gridfinity Label Generator
+                    </a>
+                    , and{" "}
+                    <a
+                      href="https://gridfinitygenerator"
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      Gridfinity Generator
+                    </a>
+                    , but wanted something that embodies the open-source spirit
+                    of the Gridfinity project. Enjoy!
+                  </p>
+                </div>
+                <div className={styles.aboutLinkGrid}>
+                  <a
+                    className={styles.aboutSourceLink}
+                    href="https://github.com/alextac98/gridfinity-viewer"
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <GitHubMark size={16} />
+                    View source on GitHub
+                  </a>
+                </div>
+                <p className={styles.aboutCredit}>
+                  Made with ❤︎ by{" "}
+                  <a
+                    href="https://alextac.com"
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    Alex Tacescu
+                  </a>{" "}
+                  &copy; {currentYear}
+                </p>
+              </section>
+
+              <section
+                aria-labelledby="attributions-info-tab"
+                className={styles.aboutPanel}
+                hidden={activeInfoSection !== "attributions"}
+                id="attributions-info-panel"
+                role="tabpanel"
+              >
+                <div className={styles.attributionList}>
+                  <a
+                    className={styles.attributionItem}
+                    href="https://github.com/ostat/gridfinity_extended_openscad"
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <span>
+                      <strong>Gridfinity Extended</strong>
+                      <small>OpenSCAD models for bins and baseplates</small>
+                    </span>
+                  </a>
+                  <a
+                    className={styles.attributionItem}
+                    href="https://www.youtube.com/watch?v=ra_9zU-mnl8"
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <span>
+                      <strong>Gridfinity</strong>
+                      <small>
+                        Original modular organization system by Zack Freedman
+                      </small>
+                    </span>
+                  </a>
+                  <a
+                    className={styles.attributionItem}
+                    href="https://openscad.org"
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <span>
+                      <strong>OpenSCAD</strong>
+                      <small>
+                        Script-based CAD engine used for model generation
+                      </small>
+                    </span>
+                  </a>
+                  <a
+                    className={styles.attributionItem}
+                    href="https://threejs.org"
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <span>
+                      <strong>three.js</strong>
+                      <small>
+                        3D rendering library used for model previews
+                      </small>
+                    </span>
+                  </a>
+                </div>
+                <p className={styles.aboutCredit}>
+                  Bundled third-party assets and OpenSCAD sources retain their
+                  upstream licenses.
+                </p>
+              </section>
+            </div>
           </section>
         </div>
       ) : null}

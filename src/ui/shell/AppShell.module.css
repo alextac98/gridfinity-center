@@ -398,22 +398,87 @@
 }
 
 .aboutDialog {
-  width: min(460px, calc(100vw - 48px));
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  width: min(780px, calc(100vw - 48px));
+  min-height: 480px;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 18px 20px 20px;
   background: var(--surface);
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+}
+
+.aboutSidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  border-right: 1px solid var(--border);
+  padding: 18px 14px;
+  background: var(--field);
+}
+
+.aboutSidebarHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 0 8px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 780;
+}
+
+.aboutTabs {
+  display: grid;
+  gap: 6px;
+}
+
+.aboutTab,
+.activeAboutTab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 720;
+  text-align: left;
+}
+
+.aboutTab:hover {
+  border-color: color-mix(in srgb, var(--brand-accent) 34%, transparent);
+  background: var(--hover);
+}
+
+.activeAboutTab {
+  border-color: color-mix(in srgb, var(--brand-accent) 28%, transparent);
+  background: var(--active);
+  color: var(--text);
+}
+
+.aboutContent {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 22px 24px 24px;
 }
 
 .aboutHeader {
   justify-content: space-between;
   gap: 14px;
-  margin-bottom: 14px;
+  margin-bottom: 18px;
 }
 
 .aboutHeader h2 {
-  font-size: 22px;
+  margin: 0;
+  font-size: 24px;
   line-height: 1.1;
   font-weight: 780;
 }
@@ -426,36 +491,108 @@
   height: 36px;
 }
 
-.aboutDialog p {
+.aboutPanel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.aboutPanel[hidden] {
+  display: none;
+}
+
+.aboutGroup p,
+.aboutCredit,
+.attributionItem small {
   color: var(--muted);
   font-size: 14px;
   font-weight: 620;
   line-height: 1.5;
 }
 
-.aboutDialog p + p {
+.aboutGroup p {
+  margin: 0;
+}
+
+.aboutGroup p + p {
   margin-top: 10px;
 }
 
-.aboutSourceLink {
-  display: inline-flex;
-  margin-top: 16px;
+.aboutGroup a {
   color: var(--brand-accent);
-  font-size: 14px;
   font-weight: 760;
 }
 
+.aboutLinkGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.aboutSourceLink {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 12px;
+  color: var(--brand-accent);
+  font-size: 14px;
+  font-weight: 760;
+  text-decoration: none;
+}
+
+.aboutSourceLink:hover {
+  border-color: color-mix(in srgb, var(--brand-accent) 38%, transparent);
+  background: var(--hover);
+}
+
 .aboutCredit {
-  margin-top: 18px;
-  color: var(--muted);
+  margin: auto 0 0;
   font-size: 12px;
-  font-weight: 620;
   text-align: center;
 }
 
 .aboutCredit a {
-  color: inherit;
+  color: var(--brand-accent);
   font-weight: 760;
+}
+
+.attributionList {
+  display: grid;
+  gap: 10px;
+}
+
+.attributionItem {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 13px 14px;
+  color: inherit;
+  background: var(--field);
+  text-decoration: none;
+}
+
+.attributionItem:hover {
+  border-color: color-mix(in srgb, var(--brand-accent) 38%, transparent);
+  background: var(--hover);
+}
+
+.attributionItem span {
+  display: grid;
+  gap: 3px;
+}
+
+.attributionItem strong {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 780;
+}
+
+.attributionItem small {
+  font-size: 12px;
 }
 
 @media (max-width: 1120px) {
@@ -565,5 +702,34 @@
 
   .topbarDescription {
     text-align: left;
+  }
+
+  .aboutOverlay {
+    padding: 14px;
+  }
+
+  .aboutDialog {
+    grid-template-columns: 1fr;
+    width: min(560px, calc(100vw - 28px));
+    min-height: 0;
+    max-height: calc(100dvh - 28px);
+    overflow: auto;
+  }
+
+  .aboutSidebar {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .aboutTabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .aboutContent {
+    padding: 18px;
+  }
+
+  .aboutLinkGrid {
+    grid-template-columns: 1fr;
   }
 }
