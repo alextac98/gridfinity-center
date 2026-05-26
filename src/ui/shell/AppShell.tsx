@@ -5,6 +5,7 @@ import {
   Boxes,
   Copyright,
   Info,
+  MessageCircle,
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
@@ -292,6 +293,18 @@ export function AppShell() {
             );
           })}
         </div>
+
+        <a
+          aria-label="Give feedback"
+          className={styles.feedbackButton}
+          href="https://github.com/alextac98/gridfinity-viewer/issues/new"
+          rel="noreferrer"
+          target="_blank"
+          title="Give feedback"
+        >
+          <MessageCircle aria-hidden="true" size={17} />
+          <span>Give Feedback</span>
+        </a>
 
         <div className={styles.sidebarBottom}>
           <button

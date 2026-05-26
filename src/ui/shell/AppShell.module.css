@@ -283,7 +283,29 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
+  margin-top: 8px;
+}
+
+.feedbackButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
   margin-top: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 0 12px;
+  color: var(--text-soft);
+  background: var(--surface);
+  font-size: 14px;
+  font-weight: 720;
+  text-decoration: none;
+}
+
+.feedbackButton:hover {
+  border-color: color-mix(in srgb, var(--brand-accent) 42%, transparent);
+  background: var(--hover);
 }
 
 .utilityButton {
@@ -297,6 +319,17 @@
 .collapsedSidebar .sidebarBottom {
   grid-template-columns: 1fr;
   width: 48px;
+}
+
+.collapsedSidebar .feedbackButton {
+  width: 48px;
+  height: 48px;
+  min-height: 48px;
+  padding: 0;
+}
+
+.collapsedSidebar .feedbackButton span {
+  display: none;
 }
 
 .collapsedSidebar .utilityButton {
@@ -645,7 +678,20 @@
   .sidebarBottom,
   .collapsedSidebar .sidebarBottom {
     width: auto;
+    margin-top: 8px;
+  }
+
+  .feedbackButton,
+  .collapsedSidebar .feedbackButton {
+    width: auto;
+    height: 42px;
+    min-height: 42px;
     margin-top: 14px;
+    padding: 0 12px;
+  }
+
+  .collapsedSidebar .feedbackButton span {
+    display: inline;
   }
 
   .collapsedSidebar .sidebarBottom {
