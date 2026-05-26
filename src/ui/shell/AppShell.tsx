@@ -113,6 +113,9 @@ const infoSections = [
   icon: typeof Info;
 }[];
 
+const commitSha = process.env.NEXT_PUBLIC_GRIDFINITY_COMMIT_SHA ?? "";
+const shortCommitSha = commitSha ? commitSha.slice(0, 7) : "local";
+
 function AppWorkspacePanel({
   app,
   isActive,
@@ -470,6 +473,24 @@ export function AppShell() {
                     View source on GitHub
                   </a>
                 </div>
+                <dl className={styles.aboutBuildInfo}>
+                  <div>
+                    <dt>Build</dt>
+                    <dd>
+                      {commitSha ? (
+                        <a
+                          href={`https://github.com/alextac98/gridfinity-viewer/commit/${commitSha}`}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          {shortCommitSha}
+                        </a>
+                      ) : (
+                        shortCommitSha
+                      )}
+                    </dd>
+                  </div>
+                </dl>
                 <p className={styles.aboutCredit}>
                   Made with ❤︎ by{" "}
                   <a

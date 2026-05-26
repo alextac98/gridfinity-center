@@ -9,6 +9,15 @@ const isPostHogEnabled =
   Boolean(postHogToken) &&
   (process.env.NODE_ENV === "production" ||
     process.env.NEXT_PUBLIC_POSTHOG_ENABLED === "true");
+const buildCommitSha = process.env.NEXT_PUBLIC_GRIDFINITY_COMMIT_SHA ?? "";
+const buildCommitShortSha = buildCommitSha ? buildCommitSha.slice(0, 7) : "";
+
+const buildProperties = buildCommitSha
+  ? {
+      app_build_commit: buildCommitSha,
+      app_build_commit_short: buildCommitShortSha,
+    }
+  : {};
 
 export function initializePostHog() {
   if (!isPostHogEnabled || !postHogToken) {
@@ -32,5 +41,8 @@ export function captureEvent(
     return;
   }
 
-  posthog.capture(eventName, properties);
+  posthog.capture(eventName, {
+    ...properties,
+    ...buildProperties,
+  });
 }
