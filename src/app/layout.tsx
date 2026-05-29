@@ -16,6 +16,12 @@ export const metadata: Metadata = {
   title: "Gridfinity Center",
   description:
     "A Next.js hub for Gridfinity generators, OpenSCAD tools, labels, model previews, and maker workflows.",
+  icons: {
+    icon: {
+      url: "/favicon.svg",
+      type: "image/svg+xml",
+    },
+  },
 };
 
 export default function RootLayout({
