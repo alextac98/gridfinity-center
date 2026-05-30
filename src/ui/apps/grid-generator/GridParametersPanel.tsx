@@ -3,6 +3,7 @@
 import { Play, RotateCcw, SlidersHorizontal } from "lucide-react";
 import type { Dispatch, SetStateAction } from "react";
 import {
+  AlignmentGridPicker,
   BooleanField,
   CollapsibleSection,
   NumberInputField,
@@ -20,14 +21,12 @@ import {
   connectorPositionOptions,
   connectorModeOptions,
   connectorSnapsOptions,
-  depthAlignmentOptions,
   fillModeOptions,
   getGridSizeFieldConfig,
   getSolidSizeFieldConfig,
   gridNumberFields,
   magnetReleaseOptions,
   plateStyleOptions,
-  widthAlignmentOptions,
   type GridNumberField,
 } from "./gridOptions";
 
@@ -535,6 +534,26 @@ export function GridParametersPanel({
   const showSolidSizeFields = params.fillMode === "grid-solid";
   const showSolidHeightField =
     params.fillMode === "solid" || params.fillMode === "grid-solid";
+  const hasWidthExtraSpace = !Number.isInteger(
+    convertGridSizeValue(params.widthUnits, params.widthUnit, "u"),
+  );
+  const hasDepthExtraSpace = !Number.isInteger(
+    convertGridSizeValue(params.depthUnits, params.depthUnit, "u"),
+  );
+
+  const updateGridAlignment = ({
+    x,
+    y,
+  }: {
+    x: GridfinityBaseplateParameters["positionFillGridX"];
+    y: GridfinityBaseplateParameters["positionFillGridY"];
+  }) => {
+    updateParams((current) => ({
+      ...current,
+      positionFillGridX: hasWidthExtraSpace ? x : "center",
+      positionFillGridY: hasDepthExtraSpace ? y : "center",
+    }));
+  };
 
   return (
     <section className={styles.panel} aria-label="Grid Parameters">
@@ -549,6 +568,14 @@ export function GridParametersPanel({
             {renderNumberField("widthUnits")}
             {renderNumberField("depthUnits")}
             {renderSizeUnitSwitch()}
+            <AlignmentGridPicker
+              label="Grid Alignment"
+              x={params.positionFillGridX}
+              y={params.positionFillGridY}
+              xEnabled={hasWidthExtraSpace}
+              yEnabled={hasDepthExtraSpace}
+              onChange={updateGridAlignment}
+            />
             <SelectField
               label="Grid Style"
               value={params.plateStyle}
@@ -564,22 +591,6 @@ export function GridParametersPanel({
               options={fillModeOptions}
               fullWidth
               onChange={updateFillMode}
-            />
-            <SelectField
-              label="Width Extra Space"
-              value={params.positionFillGridX}
-              options={widthAlignmentOptions}
-              onChange={(positionFillGridX) =>
-                updateParams((current) => ({ ...current, positionFillGridX }))
-              }
-            />
-            <SelectField
-              label="Depth Extra Space"
-              value={params.positionFillGridY}
-              options={depthAlignmentOptions}
-              onChange={(positionFillGridY) =>
-                updateParams((current) => ({ ...current, positionFillGridY }))
-              }
             />
             {showSolidSizeFields ? (
               <>

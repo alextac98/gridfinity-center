@@ -26,11 +26,13 @@ import {
   type NumberField,
 } from "./binOptions";
 import {
+  AlignmentGridPicker,
   BooleanField,
   CollapsibleSection,
   ExtraOptionField,
   NumberInputField,
   SelectField,
+  type AlignmentValue,
 } from "@/ui/apps/openscad/parameterControls";
 import styles from "@/ui/apps/openscad/generator.module.css";
 
@@ -211,6 +213,12 @@ function formatNumber(value: number, step: number) {
 
 function isMeasurementField(field: NumberField): field is BinMeasurementField {
   return generalNumberFields.includes(field as BinMeasurementField);
+}
+
+function readAlignmentValue(value: OpenScadDefineValue): AlignmentValue {
+  return value === "near" || value === "center" || value === "far"
+    ? value
+    : "center";
 }
 
 function getExtraOptions(groupTitle: string) {
@@ -553,6 +561,59 @@ export function BinParametersPanel({
     }));
   };
 
+  const updateSizeUnit = (nextUnit: GridfinityBinDimensionUnit) => {
+    const currentWidthUnit = params.widthUnit;
+    const currentDepthUnit = params.depthUnit;
+
+    if (nextUnit === currentWidthUnit && nextUnit === currentDepthUnit) {
+      return;
+    }
+
+    const widthValue = Number.isFinite(Number(draft.widthUnits))
+      ? Number(draft.widthUnits)
+      : params.widthUnits;
+    const depthValue = Number.isFinite(Number(draft.depthUnits))
+      ? Number(draft.depthUnits)
+      : params.depthUnits;
+    const widthConfig = getBinNumberFieldConfig("widthUnits", nextUnit);
+    const depthConfig = getBinNumberFieldConfig("depthUnits", nextUnit);
+    const nextWidth = clamp(
+      convertBinSizeValue(
+        widthValue,
+        "widthUnits",
+        currentWidthUnit,
+        nextUnit,
+      ),
+      widthConfig.min,
+      widthConfig.max,
+    );
+    const nextDepth = clamp(
+      convertBinSizeValue(
+        depthValue,
+        "depthUnits",
+        currentDepthUnit,
+        nextUnit,
+      ),
+      depthConfig.min,
+      depthConfig.max,
+    );
+    const nextWidthDraft = formatNumber(nextWidth, widthConfig.step);
+    const nextDepthDraft = formatNumber(nextDepth, depthConfig.step);
+
+    setDraft((current) => ({
+      ...current,
+      depthUnits: nextDepthDraft,
+      widthUnits: nextWidthDraft,
+    }));
+    updateParams((current) => ({
+      ...current,
+      depthUnit: nextUnit,
+      depthUnits: Number(nextDepthDraft),
+      widthUnit: nextUnit,
+      widthUnits: Number(nextWidthDraft),
+    }));
+  };
+
   const isSolidBlock = params.filledIn;
   const centerMagnetSize = getExtraDefine("center_magnet_size");
   const centerMagnetEnabled =
@@ -709,6 +770,58 @@ export function BinParametersPanel({
     );
   };
 
+  const renderSizeNumberField = (
+    field: Extract<BinMeasurementField, "widthUnits" | "depthUnits">,
+  ) => {
+    const unit = field === "widthUnits" ? params.widthUnit : params.depthUnit;
+    const config = getBinNumberFieldConfig(field, unit);
+
+    return (
+      <NumberInputField
+        key={field}
+        label={config.label}
+        type="number"
+        min={config.min}
+        max={config.max}
+        step={config.step}
+        value={draft[field]}
+        suffix={config.suffix}
+        onBlur={() => commitNumberField(field)}
+        onChange={(value) =>
+          setDraft((current) => ({
+            ...current,
+            [field]: value,
+          }))
+        }
+      />
+    );
+  };
+
+  const renderSizeUnitSwitch = () => (
+    <div className={`${styles.field} ${styles.fullWidthField}`}>
+      <span>Size Unit</span>
+      <div className={styles.unitSwitch} role="group" aria-label="Size unit">
+        {binDimensionUnitOptions.map((option) => (
+          <button
+            key={option.value}
+            aria-pressed={
+              params.widthUnit === option.value && params.depthUnit === option.value
+            }
+            className={
+              params.widthUnit === option.value && params.depthUnit === option.value
+                ? styles.unitButtonActive
+                : ""
+            }
+            type="button"
+            onClick={() => updateSizeUnit(option.value)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
   const renderMeasurementField = (
     field: BinMeasurementField,
     disabled = false,
@@ -848,6 +961,26 @@ export function BinParametersPanel({
     return option ? renderExtraOption(option) : null;
   };
 
+  const renderGridAlignmentField = () => (
+    <AlignmentGridPicker
+      label="Grid Alignment"
+      x={readAlignmentValue(getExtraDefine("align_grid_x"))}
+      y={readAlignmentValue(getExtraDefine("align_grid_y"))}
+      xEnabled={hasFractionalWidth}
+      yEnabled={hasFractionalDepth}
+      onChange={({ x, y }) => {
+        updateParams((current) => ({
+          ...current,
+          extraDefines: {
+            ...current.extraDefines,
+            align_grid_x: hasFractionalWidth ? x : "center",
+            align_grid_y: hasFractionalDepth ? y : "center",
+          },
+        }));
+      }}
+    />
+  );
+
   const openSectionForSearchResult = (item: ParameterSearchItem) => {
     setExpandedSections((current) => ({
       ...current,
@@ -943,17 +1076,16 @@ export function BinParametersPanel({
                 setSectionExpanded("Size", expanded)
               }
             >
-              {generalNumberFields.map((field) =>
-                renderMeasurementField(
-                  field,
-                  isSolidBlock && field === "wallThicknessMm",
-                ),
-              )}
-              {renderExtraOptionByKey("Base", "align_grid_x")}
-              {renderExtraOptionByKey("Base", "align_grid_y")}
+              {renderSizeNumberField("widthUnits")}
+              {renderSizeNumberField("depthUnits")}
+              {renderSizeUnitSwitch()}
+              {renderGridAlignmentField()}
+              {renderMeasurementField("heightUnits")}
+              {renderMeasurementField("wallThicknessMm", isSolidBlock)}
               <BooleanField
                 label="Solid Block"
                 checked={params.filledIn}
+                fullWidth
                 onChange={(filledIn) =>
                   updateParams((current) => ({ ...current, filledIn }))
                 }

@@ -1,11 +1,24 @@
 "use client";
 
-import { ChevronUp } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowDownLeft,
+  ArrowDownRight,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  ArrowUpLeft,
+  ArrowUpRight,
+  ChevronUp,
+  CircleDot,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import type { OpenScadDefineValue } from "@/shared/openscad-defines";
 import type { ParameterOption, UnitSuffix } from "./parameterTypes";
 import styles from "./generator.module.css";
+
+export type AlignmentValue = "near" | "center" | "far";
 
 type CollapsibleSectionProps = {
   title: string;
@@ -71,6 +84,140 @@ type NumberInputFieldProps = {
   onChange: (value: string) => void;
   onEnter?: () => void;
 };
+
+type AlignmentGridPickerProps = {
+  label: string;
+  x: AlignmentValue;
+  y: AlignmentValue;
+  xEnabled?: boolean;
+  yEnabled?: boolean;
+  onChange: (next: { x: AlignmentValue; y: AlignmentValue }) => void;
+};
+
+const alignmentCells = [
+  {
+    key: "top-left",
+    label: "Align top left",
+    title: "Align top left",
+    x: "far",
+    y: "near",
+    Icon: ArrowUpLeft,
+  },
+  {
+    key: "top",
+    label: "Align top center",
+    title: "Align top center",
+    x: "center",
+    y: "near",
+    Icon: ArrowUp,
+  },
+  {
+    key: "top-right",
+    label: "Align top right",
+    title: "Align top right",
+    x: "near",
+    y: "near",
+    Icon: ArrowUpRight,
+  },
+  {
+    key: "left",
+    label: "Align center left",
+    title: "Align center left",
+    x: "far",
+    y: "center",
+    Icon: ArrowLeft,
+  },
+  {
+    key: "center",
+    label: "Align center",
+    title: "Align center",
+    x: "center",
+    y: "center",
+    Icon: CircleDot,
+  },
+  {
+    key: "right",
+    label: "Align center right",
+    title: "Align center right",
+    x: "near",
+    y: "center",
+    Icon: ArrowRight,
+  },
+  {
+    key: "bottom-left",
+    label: "Align bottom left",
+    title: "Align bottom left",
+    x: "far",
+    y: "far",
+    Icon: ArrowDownLeft,
+  },
+  {
+    key: "bottom",
+    label: "Align bottom center",
+    title: "Align bottom center",
+    x: "center",
+    y: "far",
+    Icon: ArrowDown,
+  },
+  {
+    key: "bottom-right",
+    label: "Align bottom right",
+    title: "Align bottom right",
+    x: "near",
+    y: "far",
+    Icon: ArrowDownRight,
+  },
+] as const satisfies readonly {
+  key: string;
+  label: string;
+  title: string;
+  x: AlignmentValue;
+  y: AlignmentValue;
+  Icon: typeof ArrowUp;
+}[];
+
+export function AlignmentGridPicker({
+  label,
+  x,
+  y,
+  xEnabled = true,
+  yEnabled = true,
+  onChange,
+}: AlignmentGridPickerProps) {
+  const displayX = xEnabled ? x : "center";
+  const displayY = yEnabled ? y : "center";
+  const isInactive = !xEnabled && !yEnabled;
+
+  return (
+    <div className={`${styles.field} ${styles.alignmentField}`}>
+      <span>{label}</span>
+      <div className={styles.alignmentGrid} role="group" aria-label={label}>
+        {alignmentCells.map(({ Icon, key, label: cellLabel, title, x, y }) => {
+          const isSelected = displayX === x && displayY === y;
+          const isDisabled =
+            isInactive ||
+            (!xEnabled && x !== "center") ||
+            (!yEnabled && y !== "center");
+
+          return (
+            <button
+              key={key}
+              aria-label={cellLabel}
+              aria-pressed={isSelected}
+              className={isSelected ? styles.alignmentButtonActive : ""}
+              disabled={isDisabled}
+              title={title}
+              type="button"
+              onClick={() => onChange({ x, y })}
+            >
+              <Icon aria-hidden="true" size={15} strokeWidth={2.2} />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export function NumberInputField({
   label,
