@@ -6,16 +6,23 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   defaultGridfinityBinParameters,
   getMinimumWallThicknessMm,
-  type GridfinityBinParameters,
   type OpenScadDefineValue,
 } from "@/shared/gridfinityExtended";
 import {
+  binDimensionUnitOptions,
+  binWallThicknessUnitOptions,
   chamberNumberFields,
+  convertBinSizeValue,
   extraOptionGroups,
   generalNumberFields,
+  getBinNumberFieldConfig,
   labelDetailOptions,
   numberFields,
+  type BinGeneratorSettings,
+  type BinMeasurementField,
   type ExtraOption,
+  type GridfinityBinDimensionUnit,
+  type GridfinityBinWallThicknessUnit,
   type NumberField,
 } from "./binOptions";
 import {
@@ -28,10 +35,10 @@ import {
 import styles from "@/ui/apps/openscad/generator.module.css";
 
 type BinParametersPanelProps = {
-  params: GridfinityBinParameters;
+  params: BinGeneratorSettings;
   draft: Record<NumberField, string>;
   isRendering: boolean;
-  setParams: Dispatch<SetStateAction<GridfinityBinParameters>>;
+  setParams: Dispatch<SetStateAction<BinGeneratorSettings>>;
   setDraft: Dispatch<SetStateAction<Record<NumberField, string>>>;
   clearRenderError: () => void;
   onGenerate: () => void;
@@ -190,6 +197,20 @@ const parameterSearchItems: ParameterSearchItem[] = [
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
+}
+
+function formatNumber(value: number, step: number) {
+  if (step >= 1) {
+    return String(Math.round(value));
+  }
+
+  const decimals = String(step).split(".")[1]?.length ?? 2;
+
+  return String(Number(value.toFixed(Math.max(2, decimals))));
+}
+
+function isMeasurementField(field: NumberField): field is BinMeasurementField {
+  return generalNumberFields.includes(field as BinMeasurementField);
 }
 
 function getExtraOptions(groupTitle: string) {
@@ -360,7 +381,7 @@ export function BinParametersPanel({
     searchInputRef.current?.focus();
   }, [isSearchOpen]);
 
-  const updateParams = (updater: SetStateAction<GridfinityBinParameters>) => {
+  const updateParams = (updater: SetStateAction<BinGeneratorSettings>) => {
     clearRenderError();
     setParams(updater);
   };
@@ -378,41 +399,157 @@ export function BinParametersPanel({
     }));
   };
 
+  const getFieldUnit = (
+    field: NumberField,
+  ): GridfinityBinDimensionUnit | GridfinityBinWallThicknessUnit => {
+    if (field === "widthUnits") {
+      return params.widthUnit;
+    }
+
+    if (field === "depthUnits") {
+      return params.depthUnit;
+    }
+
+    if (field === "heightUnits") {
+      return params.heightUnit;
+    }
+
+    return params.wallThicknessUnit;
+  };
+
+  const getHeightUnits = (value = params.heightUnits, unit = params.heightUnit) =>
+    convertBinSizeValue(value, "heightUnits", unit, "u");
+
+  const getWallThicknessMm = () =>
+    params.wallThicknessUnit === "auto"
+      ? getMinimumWallThicknessMm(getHeightUnits())
+      : convertBinSizeValue(
+          params.wallThicknessMm,
+          "wallThicknessMm",
+          params.wallThicknessUnit,
+          "mm",
+        );
+
   const commitNumberField = (field: NumberField) => {
-    const config = numberFields[field];
+    const unit = getFieldUnit(field);
+    const config = getBinNumberFieldConfig(
+      field,
+      isMeasurementField(field) ? unit : undefined,
+    );
     const parsed = Number(draft[field]);
+    const nextHeightUnits =
+      field === "heightUnits" && Number.isFinite(parsed)
+        ? getHeightUnits(parsed, unit as GridfinityBinDimensionUnit)
+        : getHeightUnits();
     const minimumValue =
-      field === "wallThicknessMm"
-        ? getMinimumWallThicknessMm(params.heightUnits)
+      field === "wallThicknessMm" && unit !== "auto"
+        ? convertBinSizeValue(
+            getMinimumWallThicknessMm(nextHeightUnits),
+            "wallThicknessMm",
+            "mm",
+            unit as GridfinityBinDimensionUnit,
+          )
         : config.min;
     const rawValue = Number.isFinite(parsed)
       ? parsed
       : defaultGridfinityBinParameters[field];
     const nextValue = clamp(rawValue, minimumValue, config.max);
-    const normalized =
-      config.step >= 1
-        ? String(Math.round(nextValue))
-        : String(Number(nextValue.toFixed(2)));
-
-    const nextHeightUnits =
-      field === "heightUnits" ? Number(normalized) : params.heightUnits;
+    const normalized = formatNumber(nextValue, config.step);
     const nextWallThicknessMinimum = getMinimumWallThicknessMm(nextHeightUnits);
+    const nextWallThicknessMm =
+      field === "wallThicknessMm" && unit !== "auto"
+        ? convertBinSizeValue(
+            Number(normalized),
+            field,
+            unit as GridfinityBinDimensionUnit,
+            "mm",
+          )
+        : getWallThicknessMm();
+    const wallConfig = getBinNumberFieldConfig(
+      "wallThicknessMm",
+      params.wallThicknessUnit === "auto" ? "mm" : params.wallThicknessUnit,
+    );
+    const nextWallThicknessMinimumDisplay = formatNumber(
+      params.wallThicknessUnit === "auto"
+        ? nextWallThicknessMinimum
+        : convertBinSizeValue(
+            nextWallThicknessMinimum,
+            "wallThicknessMm",
+            "mm",
+            params.wallThicknessUnit,
+          ),
+      wallConfig.step,
+    );
 
     setDraft((current) => ({
       ...current,
       [field]: normalized,
       ...(field === "heightUnits" &&
-      params.wallThicknessMm < nextWallThicknessMinimum
-        ? { wallThicknessMm: String(nextWallThicknessMinimum) }
+      (params.wallThicknessUnit === "auto" ||
+        nextWallThicknessMm < nextWallThicknessMinimum)
+        ? { wallThicknessMm: nextWallThicknessMinimumDisplay }
         : {}),
     }));
     updateParams((current) => ({
       ...current,
-      [field]: config.step >= 1 ? Math.round(nextValue) : Number(normalized),
+      [field]: Number(normalized),
       ...(field === "heightUnits" &&
-      current.wallThicknessMm < nextWallThicknessMinimum
-        ? { wallThicknessMm: nextWallThicknessMinimum }
+      (current.wallThicknessUnit === "auto" ||
+        nextWallThicknessMm < nextWallThicknessMinimum)
+        ? { wallThicknessMm: Number(nextWallThicknessMinimumDisplay) }
         : {}),
+    }));
+  };
+
+  const updateFieldUnit = (
+    field: BinMeasurementField,
+    nextUnit: GridfinityBinDimensionUnit | GridfinityBinWallThicknessUnit,
+  ) => {
+    const currentUnit = getFieldUnit(field);
+
+    if (nextUnit === currentUnit) {
+      return;
+    }
+
+    const parsed = Number(draft[field]);
+    const currentValue =
+      field === "wallThicknessMm" && currentUnit === "auto"
+        ? getMinimumWallThicknessMm(getHeightUnits())
+        : Number.isFinite(parsed)
+          ? parsed
+          : params[field];
+    const config = getBinNumberFieldConfig(field, nextUnit);
+    const nextValue =
+      field === "wallThicknessMm" && nextUnit === "auto"
+        ? getMinimumWallThicknessMm(getHeightUnits())
+        : clamp(
+            convertBinSizeValue(
+              currentValue,
+              field,
+              currentUnit === "auto" ? "mm" : currentUnit,
+              nextUnit === "auto" ? "mm" : nextUnit,
+            ),
+            config.min,
+            config.max,
+          );
+    const normalized = formatNumber(nextValue, config.step);
+    const unitField =
+      field === "widthUnits"
+        ? "widthUnit"
+        : field === "depthUnits"
+          ? "depthUnit"
+          : field === "heightUnits"
+            ? "heightUnit"
+            : "wallThicknessUnit";
+
+    setDraft((current) => ({
+      ...current,
+      [field]: normalized,
+    }));
+    updateParams((current) => ({
+      ...current,
+      [field]: Number(normalized),
+      [unitField]: nextUnit,
     }));
   };
 
@@ -434,8 +571,12 @@ export function BinParametersPanel({
   const hasVerticalSeparators = params.verticalChambers > 1;
   const hasHorizontalSeparators = params.horizontalChambers > 1;
   const hasAnySeparators = hasVerticalSeparators || hasHorizontalSeparators;
-  const hasFractionalWidth = !Number.isInteger(params.widthUnits);
-  const hasFractionalDepth = !Number.isInteger(params.depthUnits);
+  const hasFractionalWidth = !Number.isInteger(
+    convertBinSizeValue(params.widthUnits, "widthUnits", params.widthUnit, "u"),
+  );
+  const hasFractionalDepth = !Number.isInteger(
+    convertBinSizeValue(params.depthUnits, "depthUnits", params.depthUnit, "u"),
+  );
 
   const isExtraOptionDisabled = (option: ExtraOption) => {
     const key = option.key;
@@ -544,7 +685,7 @@ export function BinParametersPanel({
   };
 
   const renderNumberField = (field: NumberField, disabled = false) => {
-    const config = numberFields[field];
+    const config = getBinNumberFieldConfig(field);
 
     return (
       <NumberInputField
@@ -568,6 +709,69 @@ export function BinParametersPanel({
     );
   };
 
+  const renderMeasurementField = (
+    field: BinMeasurementField,
+    disabled = false,
+  ) => {
+    const unit = getFieldUnit(field);
+    const config = getBinNumberFieldConfig(field, unit);
+    const inputDisabled =
+      disabled || (field === "wallThicknessMm" && unit === "auto");
+
+    return (
+      <div
+        key={field}
+        className={`${styles.field} ${styles.measurementField} ${
+          disabled ? styles.fieldDisabled : ""
+        }`}
+      >
+        <span>{config.label}</span>
+        <div className={styles.measurementControl}>
+          <div className={styles.inputWrap}>
+            <input
+              aria-label={`${config.label} ${config.suffix}`}
+              disabled={inputDisabled}
+              inputMode="decimal"
+              max={config.max}
+              min={config.min}
+              step={config.step}
+              type="number"
+              value={draft[field]}
+              onBlur={() => commitNumberField(field)}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  [field]: event.target.value,
+                }))
+              }
+            />
+          </div>
+          <div
+            className={styles.unitSwitch}
+            role="group"
+            aria-label={`${config.label} unit`}
+          >
+            {(field === "wallThicknessMm"
+              ? binWallThicknessUnitOptions
+              : binDimensionUnitOptions
+            ).map((option) => (
+              <button
+                key={option.value}
+                aria-pressed={unit === option.value}
+                className={unit === option.value ? styles.unitButtonActive : ""}
+                disabled={disabled}
+                type="button"
+                onClick={() => updateFieldUnit(field, option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderExtraOption = (option: ExtraOption) => (
     (() => {
       if (
@@ -576,8 +780,18 @@ export function BinParametersPanel({
       ) {
         const wallUnits =
           option.key === "wallcutout_vertical_position"
-            ? params.widthUnits
-            : params.depthUnits;
+            ? convertBinSizeValue(
+                params.widthUnits,
+                "widthUnits",
+                params.widthUnit,
+                "u",
+              )
+            : convertBinSizeValue(
+                params.depthUnits,
+                "depthUnits",
+                params.depthUnit,
+                "u",
+              );
         const rawValue = getExtraDefine(option.key);
         const displayValue = toWallCutoutPositionDisplayTuple(rawValue, wallUnits);
 
@@ -730,7 +944,10 @@ export function BinParametersPanel({
               }
             >
               {generalNumberFields.map((field) =>
-                renderNumberField(field, isSolidBlock && field === "wallThicknessMm"),
+                renderMeasurementField(
+                  field,
+                  isSolidBlock && field === "wallThicknessMm",
+                ),
               )}
               {renderExtraOptionByKey("Base", "align_grid_x")}
               {renderExtraOptionByKey("Base", "align_grid_y")}

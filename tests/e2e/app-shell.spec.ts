@@ -52,7 +52,7 @@ test("allows partial bin height units", async ({ page }) => {
   await page.getByRole("tab", { name: /Bin Generator/ }).click();
   await expect(page).toHaveURL(/\/bin-generator$/);
 
-  const heightInput = page.getByRole("spinbutton", { name: "Height u" });
+  const heightInput = page.locator('input[aria-label="Height u"]');
   await expect(heightInput).toHaveAttribute("step", "0.1");
 
   await heightInput.fill("2.5");
@@ -67,10 +67,20 @@ test("allows partial bin height units", async ({ page }) => {
         );
         const parsed = storedSettings ? JSON.parse(storedSettings) : null;
 
-        return parsed?.params?.heightUnits ?? null;
+        return parsed
+          ? {
+              heightUnit: parsed.params.heightUnit,
+              heightUnits: parsed.params.heightUnits,
+              wallThicknessUnit: parsed.params.wallThicknessUnit,
+            }
+          : null;
       }),
     )
-    .toBe(2.5);
+    .toEqual({
+      heightUnit: "u",
+      heightUnits: 2.5,
+      wallThicknessUnit: "auto",
+    });
 });
 
 test("allows panning and zooming the label preview", async ({ page }) => {

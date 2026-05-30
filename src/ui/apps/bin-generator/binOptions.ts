@@ -1,4 +1,8 @@
 import type { GridfinityBinParameters } from "@/shared/gridfinityExtended";
+import {
+  GRIDFINITY_GRID_MM,
+  GRIDFINITY_HEIGHT_UNIT_MM,
+} from "@/shared/gridfinity/constants";
 import type {
   ParameterOption,
   ParameterOptionGroup,
@@ -16,6 +20,18 @@ export type NumberField = keyof Pick<
 
 export type ExtraOption = ParameterOption;
 export type ExtraOptionGroup = ParameterOptionGroup;
+export type GridfinityBinDimensionUnit = "u" | "mm" | "in";
+export type GridfinityBinWallThicknessUnit = "auto" | "mm" | "in";
+export type BinGeneratorSettings = GridfinityBinParameters & {
+  widthUnit: GridfinityBinDimensionUnit;
+  depthUnit: GridfinityBinDimensionUnit;
+  heightUnit: GridfinityBinDimensionUnit;
+  wallThicknessUnit: GridfinityBinWallThicknessUnit;
+};
+export type BinMeasurementField = Extract<
+  NumberField,
+  "widthUnits" | "depthUnits" | "heightUnits" | "wallThicknessMm"
+>;
 
 export const numberFields: Record<
   NumberField,
@@ -47,7 +63,94 @@ export const numberFields: Record<
   },
 };
 
-export const generalNumberFields: NumberField[] = [
+export const binDimensionUnitOptions = [
+  { value: "u", label: "u" },
+  { value: "mm", label: "mm" },
+  { value: "in", label: "in" },
+] as const satisfies readonly {
+  value: GridfinityBinDimensionUnit;
+  label: string;
+}[];
+
+export const binWallThicknessUnitOptions = [
+  { value: "auto", label: "auto" },
+  { value: "mm", label: "mm" },
+  { value: "in", label: "in" },
+] as const satisfies readonly {
+  value: GridfinityBinWallThicknessUnit;
+  label: string;
+}[];
+
+function getUnitSizeMm(field: NumberField) {
+  if (field === "widthUnits" || field === "depthUnits") {
+    return GRIDFINITY_GRID_MM;
+  }
+
+  if (field === "heightUnits") {
+    return GRIDFINITY_HEIGHT_UNIT_MM;
+  }
+
+  return 1;
+}
+
+export function getBinNumberFieldConfig(
+  field: NumberField,
+  unit?: GridfinityBinDimensionUnit | GridfinityBinWallThicknessUnit,
+) {
+  const baseConfig = numberFields[field];
+
+  if (
+    !unit ||
+    unit === "auto" ||
+    field === "verticalChambers" ||
+    field === "horizontalChambers"
+  ) {
+    return baseConfig;
+  }
+
+  const unitSizeMm = getUnitSizeMm(field);
+
+  if (unit === "mm") {
+    return {
+      ...baseConfig,
+      min: Number((baseConfig.min * unitSizeMm).toFixed(2)),
+      max: Number((baseConfig.max * unitSizeMm).toFixed(2)),
+      step: field === "wallThicknessMm" ? 0.05 : 1,
+      suffix: "mm",
+    };
+  }
+
+  if (unit === "in") {
+    return {
+      ...baseConfig,
+      min: Number(((baseConfig.min * unitSizeMm) / 25.4).toFixed(3)),
+      max: Number(((baseConfig.max * unitSizeMm) / 25.4).toFixed(3)),
+      step: field === "wallThicknessMm" ? 0.005 : 0.05,
+      suffix: "in",
+    };
+  }
+
+  return baseConfig;
+}
+
+export function convertBinSizeValue(
+  value: number,
+  field: NumberField,
+  from: GridfinityBinDimensionUnit,
+  to: GridfinityBinDimensionUnit,
+) {
+  const unitSizeMm = getUnitSizeMm(field);
+  const mm =
+    from === "u" ? value * unitSizeMm : from === "in" ? value * 25.4 : value;
+
+  if (to === "u") {
+    return mm / unitSizeMm;
+  }
+
+  return to === "in" ? mm / 25.4 : mm;
+}
+
+export const generalNumberFields: BinMeasurementField[] = [
   "widthUnits",
   "depthUnits",
   "heightUnits",

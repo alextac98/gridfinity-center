@@ -121,7 +121,7 @@ export const defaultGridfinityBinParameters: GridfinityBinParameters = {
   screws: false,
   flatBase: "off",
   filledIn: false,
-  wallThicknessMm: getMinimumWallThicknessMm(3),
+  wallThicknessMm: 0,
   extraDefines: {
     headroom: 0.8,
     lip_side_relief_trigger: [1, 1],

@@ -23,13 +23,21 @@ import { readLocalStorageJson, writeLocalStorageJson } from "../openscad/storage
 import { useGroundPlanePreference } from "../openscad/useGroundPlanePreference";
 import { useOpenScadModel } from "../openscad/useOpenScadModel";
 import { BinParametersPanel } from "./BinParametersPanel";
-import { numberFields, type NumberField } from "./binOptions";
+import {
+  convertBinSizeValue,
+  getBinNumberFieldConfig,
+  numberFields,
+  type BinGeneratorSettings,
+  type GridfinityBinDimensionUnit,
+  type GridfinityBinWallThicknessUnit,
+  type NumberField,
+} from "./binOptions";
 import { measureStlDimensions } from "../openscad/stlDimensions";
 
 const binSettingsStorageKey = "gridfinity-bin-generator-settings";
 
 type StoredBinGeneratorSettings = {
-  params: GridfinityBinParameters;
+  params: BinGeneratorSettings;
   draft: Record<NumberField, string>;
 };
 
@@ -52,6 +60,8 @@ const labelPositions = [
 ] as const;
 const fingerSlides = ["none", "rounded", "chamfered"] as const;
 const flatBases = ["off", "gridfinity", "rounded"] as const;
+const dimensionUnits = ["u", "mm", "in"] as const;
+const wallThicknessUnits = ["auto", "mm", "in"] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -76,7 +86,18 @@ function cloneDefaultBinParameters(): GridfinityBinParameters {
   };
 }
 
-function createDraftFromParams(params: GridfinityBinParameters) {
+function createDefaultBinSettings(): BinGeneratorSettings {
+  return {
+    ...cloneDefaultBinParameters(),
+    wallThicknessMm: 0.95,
+    widthUnit: "u",
+    depthUnit: "u",
+    heightUnit: "u",
+    wallThicknessUnit: "auto",
+  };
+}
+
+function createDraftFromParams(params: BinGeneratorSettings) {
   return Object.fromEntries(
     Object.keys(numberFields).map((key) => [
       key,
@@ -99,8 +120,9 @@ function readNumberField(
   value: unknown,
   fallback: number,
   field: NumberField,
+  unit?: GridfinityBinDimensionUnit | GridfinityBinWallThicknessUnit,
 ) {
-  const config = numberFields[field];
+  const config = getBinNumberFieldConfig(field, unit);
 
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return fallback;
@@ -110,7 +132,7 @@ function readNumberField(
 }
 
 function parseStoredBinSettings(value: unknown): StoredBinGeneratorSettings {
-  const defaults = cloneDefaultBinParameters();
+  const defaults = createDefaultBinSettings();
   const storedParams = isRecord(value)
     ? isRecord(value.params)
       ? value.params
@@ -130,22 +152,32 @@ function parseStoredBinSettings(value: unknown): StoredBinGeneratorSettings {
     }
   }
 
-  const params: GridfinityBinParameters = {
+  const params: BinGeneratorSettings = {
     ...defaults,
     widthUnits: readNumberField(
       storedParams.widthUnits,
       defaults.widthUnits,
       "widthUnits",
+      readString(storedParams.widthUnit, defaults.widthUnit, dimensionUnits),
     ),
     depthUnits: readNumberField(
       storedParams.depthUnits,
       defaults.depthUnits,
       "depthUnits",
+      readString(storedParams.depthUnit, defaults.depthUnit, dimensionUnits),
     ),
     heightUnits: readNumberField(
       storedParams.heightUnits,
       defaults.heightUnits,
       "heightUnits",
+      readString(storedParams.heightUnit, defaults.heightUnit, dimensionUnits),
+    ),
+    widthUnit: readString(storedParams.widthUnit, defaults.widthUnit, dimensionUnits),
+    depthUnit: readString(storedParams.depthUnit, defaults.depthUnit, dimensionUnits),
+    heightUnit: readString(
+      storedParams.heightUnit,
+      defaults.heightUnit,
+      dimensionUnits,
     ),
     verticalChambers: readNumberField(
       storedParams.verticalChambers,
@@ -161,6 +193,16 @@ function parseStoredBinSettings(value: unknown): StoredBinGeneratorSettings {
       storedParams.wallThicknessMm,
       defaults.wallThicknessMm,
       "wallThicknessMm",
+      readString(
+        storedParams.wallThicknessUnit,
+        defaults.wallThicknessUnit,
+        wallThicknessUnits,
+      ),
+    ),
+    wallThicknessUnit: readString(
+      storedParams.wallThicknessUnit,
+      defaults.wallThicknessUnit,
+      wallThicknessUnits,
     ),
     lipStyle: readString(storedParams.lipStyle, defaults.lipStyle, lipStyles),
     labelStyle: readString(
@@ -207,7 +249,7 @@ function parseStoredBinSettings(value: unknown): StoredBinGeneratorSettings {
 }
 
 function readStoredBinSettings(): StoredBinGeneratorSettings {
-  const defaults = cloneDefaultBinParameters();
+  const defaults = createDefaultBinSettings();
 
   return readLocalStorageJson(
     binSettingsStorageKey,
@@ -217,10 +259,36 @@ function readStoredBinSettings(): StoredBinGeneratorSettings {
 }
 
 function writeStoredBinSettings(
-  params: GridfinityBinParameters,
+  params: BinGeneratorSettings,
   draft: Record<NumberField, string>,
 ) {
   writeLocalStorageJson(binSettingsStorageKey, { params, draft });
+}
+
+function createRenderParams(settings: BinGeneratorSettings): GridfinityBinParameters {
+  const {
+    depthUnit,
+    heightUnit,
+    wallThicknessUnit,
+    widthUnit,
+    ...params
+  } = settings;
+
+  return {
+    ...params,
+    widthUnits: convertBinSizeValue(settings.widthUnits, "widthUnits", widthUnit, "u"),
+    depthUnits: convertBinSizeValue(settings.depthUnits, "depthUnits", depthUnit, "u"),
+    heightUnits: convertBinSizeValue(settings.heightUnits, "heightUnits", heightUnit, "u"),
+    wallThicknessMm:
+      wallThicknessUnit === "auto"
+        ? 0
+        : convertBinSizeValue(
+            settings.wallThicknessMm,
+            "wallThicknessMm",
+            wallThicknessUnit,
+            "mm",
+          ),
+  };
 }
 
 function createParamsKey(params: GridfinityBinParameters) {
@@ -243,18 +311,22 @@ function createParamsKey(params: GridfinityBinParameters) {
   });
 }
 
-function createBinAnalyticsProperties(params: GridfinityBinParameters) {
+function createBinAnalyticsProperties(settings: BinGeneratorSettings) {
   return {
-    width_units: params.widthUnits,
-    depth_units: params.depthUnits,
-    height_units: params.heightUnits,
-    vertical_chambers: params.verticalChambers,
-    horizontal_chambers: params.horizontalChambers,
-    lip_style: params.lipStyle,
-    label_style: params.labelStyle,
-    magnets: params.magnets,
-    screws: params.screws,
-    filled_in: params.filledIn,
+    width_units: settings.widthUnits,
+    depth_units: settings.depthUnits,
+    height_units: settings.heightUnits,
+    width_unit: settings.widthUnit,
+    depth_unit: settings.depthUnit,
+    height_unit: settings.heightUnit,
+    vertical_chambers: settings.verticalChambers,
+    horizontal_chambers: settings.horizontalChambers,
+    lip_style: settings.lipStyle,
+    label_style: settings.labelStyle,
+    magnets: settings.magnets,
+    screws: settings.screws,
+    filled_in: settings.filledIn,
+    wall_thickness_unit: settings.wallThicknessUnit,
   };
 }
 
@@ -262,8 +334,9 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
   const [initialSettings] = useState(readStoredBinSettings);
   const [params, setParams] = useState(initialSettings.params);
   const [draft, setDraft] = useState(initialSettings.draft);
+  const renderParams = useMemo(() => createRenderParams(params), [params]);
   const model = useOpenScadModel({
-    params,
+    params: renderParams,
     cacheModelId: "bin-generator",
     entryFile: "gridfinity_basic_cup.scad",
     outputBaseName: "gridfinity-bin",
@@ -290,8 +363,9 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
   }, [model.isPreviewCurrent, model.stl]);
 
   const reset = () => {
-    const defaultParams = cloneDefaultBinParameters();
+    const defaultParams = createDefaultBinSettings();
     const defaultDraft = createDraftFromParams(defaultParams);
+    const defaultRenderParams = createRenderParams(defaultParams);
 
     captureEvent("bin_model_reset");
     model.clearRenderError();
@@ -300,7 +374,7 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
     setParams(defaultParams);
     setDraft(defaultDraft);
     writeStoredBinSettings(defaultParams, defaultDraft);
-    void model.requestRender(defaultParams);
+    void model.requestRender(defaultRenderParams);
   };
 
   if (!model.hasMounted) {
@@ -347,7 +421,7 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
           onGenerate={() => {
             const analyticsProperties = createBinAnalyticsProperties(params);
             captureEvent("bin_model_generate_requested", analyticsProperties);
-            void model.requestRender(params, {
+            void model.requestRender(renderParams, {
               completionEventName: "bin_model_preview_ready",
               properties: analyticsProperties,
             });
@@ -371,7 +445,7 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
       }
       outputPanel={
         <ModelOutputPanel
-          modelSummary={`${params.widthUnits} x ${params.depthUnits} x ${params.heightUnits} bin`}
+          modelSummary={`${params.widthUnits}${params.widthUnit} x ${params.depthUnits}${params.depthUnit} x ${params.heightUnits}${params.heightUnit} bin`}
           dimensions={dimensions}
           currentModelUrl={model.currentModelUrl}
           floorMode={groundPlane.preference.floorMode}
