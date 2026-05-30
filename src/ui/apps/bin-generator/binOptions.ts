@@ -23,7 +23,7 @@ export const numberFields: Record<
 > = {
   widthUnits: { label: "Width", min: 0.5, max: 12, step: 0.5, suffix: "u" },
   depthUnits: { label: "Depth", min: 0.5, max: 12, step: 0.5, suffix: "u" },
-  heightUnits: { label: "Height", min: 1, max: 24, step: 1, suffix: "u" },
+  heightUnits: { label: "Height", min: 1, max: 24, step: 0.1, suffix: "u" },
   verticalChambers: {
     label: "X Compartments",
     min: 1,
