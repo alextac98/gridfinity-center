@@ -490,6 +490,38 @@
     white-space: nowrap;
 }
 
+.measurementField {
+    grid-column: 1 / -1;
+}
+
+.measurementControl {
+    display: grid;
+    grid-template-columns: minmax(104px, 1fr) minmax(132px, 0.42fr);
+    gap: 8px;
+    align-items: stretch;
+}
+
+.measurementControl .inputWrap input {
+    padding-right: 11px;
+}
+
+.measurementControl .inputWrap input:disabled {
+    border-color: color-mix(in srgb, var(--border-strong) 72%, var(--surface));
+    background: color-mix(in srgb, var(--field) 46%, var(--surface));
+    color: var(--muted);
+    cursor: not-allowed;
+}
+
+.measurementField.fieldDisabled .inputWrap input {
+    border-color: color-mix(in srgb, var(--border-strong) 72%, var(--surface));
+    background: color-mix(in srgb, var(--field) 46%, var(--surface));
+    color: var(--muted);
+}
+
+.measurementControl .unitSwitch {
+    min-height: 40px;
+}
+
 .autoInputWrap {
     position: relative;
     display: grid;
