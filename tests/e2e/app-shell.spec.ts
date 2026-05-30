@@ -48,6 +48,31 @@ test("restores label settings after a reload", async ({ page }) => {
   await expect(page.getByLabel("Additional Text")).toHaveValue("Reload me");
 });
 
+test("allows partial bin height units", async ({ page }) => {
+  await page.getByRole("tab", { name: /Bin Generator/ }).click();
+  await expect(page).toHaveURL(/\/bin-generator$/);
+
+  const heightInput = page.getByRole("spinbutton", { name: "Height u" });
+  await expect(heightInput).toHaveAttribute("step", "0.1");
+
+  await heightInput.fill("2.5");
+  await heightInput.blur();
+  await expect(heightInput).toHaveValue("2.5");
+
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const storedSettings = window.localStorage.getItem(
+          "gridfinity-bin-generator-settings",
+        );
+        const parsed = storedSettings ? JSON.parse(storedSettings) : null;
+
+        return parsed?.params?.heightUnits ?? null;
+      }),
+    )
+    .toBe(2.5);
+});
+
 test("allows panning and zooming the label preview", async ({ page }) => {
   const viewport = page.getByLabel("Label preview viewport");
   const grid = page.getByTestId("label-preview-grid");

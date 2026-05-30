@@ -395,7 +395,7 @@ export function BinParametersPanel({
         : String(Number(nextValue.toFixed(2)));
 
     const nextHeightUnits =
-      field === "heightUnits" ? Math.round(nextValue) : params.heightUnits;
+      field === "heightUnits" ? Number(normalized) : params.heightUnits;
     const nextWallThicknessMinimum = getMinimumWallThicknessMm(nextHeightUnits);
 
     setDraft((current) => ({
