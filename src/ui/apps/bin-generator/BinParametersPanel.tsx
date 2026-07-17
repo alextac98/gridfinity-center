@@ -11,7 +11,6 @@ import {
 import {
   binDimensionUnitOptions,
   binWallThicknessUnitOptions,
-  chamberNumberFields,
   convertBinSizeValue,
   extraOptionGroups,
   generalNumberFields,
@@ -25,6 +24,15 @@ import {
   type GridfinityBinWallThicknessUnit,
   type NumberField,
 } from "./binOptions";
+import { CompartmentLayoutEditor } from "./CompartmentLayoutEditor";
+import {
+  compartmentUnitStep,
+  formatCompartmentValue,
+  fromMillimeters,
+  toMillimeters,
+  type CompartmentUnit,
+} from "./compartmentUnits";
+import binStyles from "./binGenerator.module.css";
 import {
   AlignmentGridPicker,
   BooleanField,
@@ -32,6 +40,7 @@ import {
   ExtraOptionField,
   NumberInputField,
   SelectField,
+  UnitPicker,
   type AlignmentValue,
 } from "@/ui/apps/openscad/parameterControls";
 import styles from "@/ui/apps/openscad/generator.module.css";
@@ -129,12 +138,11 @@ const parameterSearchItems: ParameterSearchItem[] = [
     section: "Size",
   })),
   { id: "filled_in", label: "Solid Block", section: "Size" },
-  ...chamberNumberFields.map((field) => ({
-    id: field,
-    label: numberFields[field].label,
-    section: "Compartments",
-  })),
-  ...getExtraOptions("Subdivision Details").map((option) => ({
+  { id: "compartment_layout", label: "Compartment Layout", section: "Compartments" },
+  ...getExtraOptions("Subdivision Details").filter((option) =>
+    !option.key.endsWith("_irregular_subdivisions") &&
+    !option.key.endsWith("_separator_config")
+  ).map((option) => ({
     id: option.key,
     label: option.label,
     section: "Compartments",
@@ -356,6 +364,23 @@ function readExpandedSections() {
   }
 }
 
+function convertCompartmentDefine(
+  value: OpenScadDefineValue | undefined,
+  convert: (value: number) => number,
+) {
+  if (typeof value === "number") {
+    return convert(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) =>
+      typeof item === "number" ? convert(item) : item,
+    );
+  }
+
+  return value;
+}
+
 export function BinParametersPanel({
   params,
   draft,
@@ -368,6 +393,8 @@ export function BinParametersPanel({
 }: BinParametersPanelProps) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [compartmentUnit, setCompartmentUnit] =
+    useState<CompartmentUnit>("mm");
   const [expandedSections, setExpandedSections] = useState<
     Record<string, boolean>
   >(readExpandedSections);
@@ -745,31 +772,6 @@ export function BinParametersPanel({
     return false;
   };
 
-  const renderNumberField = (field: NumberField, disabled = false) => {
-    const config = getBinNumberFieldConfig(field);
-
-    return (
-      <NumberInputField
-        key={field}
-        label={config.label}
-        type="number"
-        min={config.min}
-        max={config.max}
-        step={config.step}
-        value={draft[field]}
-        suffix={config.suffix}
-        disabled={disabled}
-        onBlur={() => commitNumberField(field)}
-        onChange={(value) =>
-          setDraft((current) => ({
-            ...current,
-            [field]: value,
-          }))
-        }
-      />
-    );
-  };
-
   const renderSizeNumberField = (
     field: Extract<BinMeasurementField, "widthUnits" | "depthUnits">,
   ) => {
@@ -800,25 +802,14 @@ export function BinParametersPanel({
   const renderSizeUnitSwitch = () => (
     <div className={`${styles.field} ${styles.fullWidthField}`}>
       <span>Size Unit</span>
-      <div className={styles.unitSwitch} role="group" aria-label="Size unit">
-        {binDimensionUnitOptions.map((option) => (
-          <button
-            key={option.value}
-            aria-pressed={
-              params.widthUnit === option.value && params.depthUnit === option.value
-            }
-            className={
-              params.widthUnit === option.value && params.depthUnit === option.value
-                ? styles.unitButtonActive
-                : ""
-            }
-            type="button"
-            onClick={() => updateSizeUnit(option.value)}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
+      <UnitPicker
+        ariaLabel="Size unit"
+        value={
+          params.widthUnit === params.depthUnit ? params.widthUnit : undefined
+        }
+        options={binDimensionUnitOptions}
+        onChange={updateSizeUnit}
+      />
     </div>
   );
 
@@ -960,6 +951,67 @@ export function BinParametersPanel({
 
     return option ? renderExtraOption(option) : null;
   };
+  const renderSubdivisionOptions = (keys: string[]) =>
+    keys.map((key) => {
+      const option = getExtraOption("Subdivision Details", key);
+
+      if (!option) {
+        return null;
+      }
+
+      const isDimensional =
+        (option.type === "number" || option.type === "tuple") &&
+        option.suffix === "mm";
+
+      if (!isDimensional) {
+        return renderExtraOption(option);
+      }
+
+      const displayOption = {
+        ...option,
+        suffix: compartmentUnit,
+        step: compartmentUnitStep(compartmentUnit),
+        ...(option.type === "number"
+          ? {
+              min:
+                typeof option.min === "number"
+                  ? fromMillimeters(option.min, compartmentUnit)
+                  : undefined,
+              max:
+                typeof option.max === "number"
+                  ? fromMillimeters(option.max, compartmentUnit)
+                  : undefined,
+            }
+          : {}),
+      } as ExtraOption;
+      const displayValue = convertCompartmentDefine(
+        getExtraDefine(option.key),
+        (value) =>
+          Number(
+            formatCompartmentValue(
+              fromMillimeters(value, compartmentUnit),
+              compartmentUnit,
+            ),
+          ),
+      );
+
+      return (
+        <ExtraOptionField
+          key={option.key}
+          option={displayOption}
+          value={displayValue}
+          disabled={isExtraOptionDisabled(option)}
+          onChange={(optionKey, nextValue) =>
+            updateExtraDefine(
+              optionKey,
+              convertCompartmentDefine(nextValue, (value) =>
+                Number(toMillimeters(value, compartmentUnit).toFixed(4)),
+              ) ?? 0,
+            )
+          }
+        />
+      );
+    });
 
   const renderGridAlignmentField = () => (
     <AlignmentGridPicker
@@ -1158,10 +1210,47 @@ export function BinParametersPanel({
                 setSectionExpanded("Compartments", expanded)
               }
             >
-              {chamberNumberFields.map((field) =>
-                renderNumberField(field, isSolidBlock)
-              )}
-              {renderExtraOptions("Subdivision Details")}
+              <CompartmentLayoutEditor
+                params={params}
+                unit={compartmentUnit}
+                disabled={isSolidBlock}
+                onUnitChange={setCompartmentUnit}
+                onChange={(nextParams) => {
+                  setDraft((current) => ({
+                    ...current,
+                    verticalChambers: String(nextParams.verticalChambers),
+                    horizontalChambers: String(nextParams.horizontalChambers),
+                  }));
+                  updateParams(nextParams);
+                }}
+              />
+              {renderSubdivisionOptions([
+                "chamber_wall_thickness",
+                "chamber_wall_headroom",
+                "chamber_wall_top_radius",
+              ])}
+              <details className={binStyles.advancedDividerSettings}>
+                <summary>Advanced X Divider Geometry</summary>
+                <div className={binStyles.advancedDividerGrid}>
+                  {renderSubdivisionOptions([
+                    "vertical_separator_bend_separation",
+                    "vertical_separator_bend_angle",
+                    "vertical_separator_bend_position",
+                    "vertical_separator_cut_depth",
+                  ])}
+                </div>
+              </details>
+              <details className={binStyles.advancedDividerSettings}>
+                <summary>Advanced Y Divider Geometry</summary>
+                <div className={binStyles.advancedDividerGrid}>
+                  {renderSubdivisionOptions([
+                    "horizontal_separator_bend_separation",
+                    "horizontal_separator_bend_angle",
+                    "horizontal_separator_bend_position",
+                    "horizontal_separator_cut_depth",
+                  ])}
+                </div>
+              </details>
             </CollapsibleSection>
           </div>
 

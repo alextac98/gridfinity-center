@@ -304,6 +304,40 @@ export function SelectField<T extends string = string>({
   );
 }
 
+type UnitPickerProps<T extends string> = {
+  ariaLabel: string;
+  value?: T;
+  options: readonly { value: T; label: string; ariaLabel?: string }[];
+  disabled?: boolean;
+  onChange: (value: T) => void;
+};
+
+export function UnitPicker<T extends string>({
+  ariaLabel,
+  value,
+  options,
+  disabled = false,
+  onChange,
+}: UnitPickerProps<T>) {
+  return (
+    <div className={styles.unitSwitch} role="group" aria-label={ariaLabel}>
+      {options.map((option) => (
+        <button
+          aria-label={option.ariaLabel}
+          aria-pressed={value === option.value}
+          className={value === option.value ? styles.unitButtonActive : ""}
+          disabled={disabled}
+          key={option.value}
+          type="button"
+          onClick={() => onChange(option.value)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 type BooleanFieldProps = {
   label: string;
   checked: boolean;

@@ -1,0 +1,481 @@
+.compartmentEditor {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 12px;
+}
+
+.compartmentEditorHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.compartmentEditorHeader div {
+  display: grid;
+  gap: 3px;
+}
+
+.compartmentEditorHeader strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 760;
+}
+
+.compartmentEditorHeader span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.compartmentEditorHeader b {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: var(--field);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.layoutStage {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  height: clamp(250px, 35vh, 350px);
+  align-items: center;
+  justify-content: center;
+  padding: 34px 0 0 34px;
+}
+
+.layoutCanvas {
+  position: relative;
+  overflow: visible;
+  border: 2px solid color-mix(in srgb, var(--text) 42%, var(--border));
+  border-radius: 10px;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--brand-accent) 9%, var(--field)),
+      var(--field)
+    );
+  touch-action: none;
+}
+
+.layoutCanvasTall {
+  width: auto;
+  max-width: 100%;
+  height: 100%;
+}
+
+.layoutCanvasWide {
+  width: 100%;
+  height: auto;
+  max-height: 100%;
+}
+
+.layoutCanvasDisabled {
+  opacity: 0.48;
+}
+
+.axisAddButton {
+  position: absolute;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+}
+
+.axisAddButton:hover:not(:disabled) {
+  color: var(--brand-accent);
+}
+
+.axisAddButton i {
+  flex: 1 1 auto;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.axisAddButton svg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  stroke-width: 3;
+  transform: translate(-50%, -50%);
+}
+
+.axisAddButton:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.axisAddButtonX {
+  bottom: 100%;
+  left: 0;
+  width: 100%;
+  height: 30px;
+}
+
+.axisAddButtonX i {
+  height: 2px;
+}
+
+.axisAddButtonY {
+  top: 0;
+  right: 100%;
+  width: 30px;
+  height: 100%;
+  flex-direction: column;
+}
+
+.axisAddButtonY i {
+  width: 2px;
+}
+
+.axisAddLabel {
+  position: absolute;
+  z-index: 1;
+  padding: 2px;
+  background: var(--surface);
+  font-size: 10px;
+  line-height: 1;
+}
+
+.axisAddButtonX .axisAddLabel {
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+}
+
+.axisAddButtonY .axisAddLabel {
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.layoutSurface {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.layoutLine {
+  position: absolute;
+  z-index: 1;
+  display: block;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.layoutLine::before {
+  position: absolute;
+  content: "";
+}
+
+.layoutX {
+  top: 0;
+  width: 18px;
+  height: 100%;
+  transform: translateX(-50%);
+}
+
+.layoutX::before {
+  top: 0;
+  left: 50%;
+  height: 1000px;
+  transform: translateX(-50%);
+}
+
+.layoutY {
+  left: 0;
+  width: 100%;
+  height: 18px;
+  transform: translateY(-50%);
+}
+
+.layoutY::before {
+  top: 50%;
+  left: 0;
+  width: 1000px;
+  transform: translateY(-50%);
+}
+
+.layoutDivider::before {
+  border-color: var(--brand-accent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--brand-accent) 34%, transparent);
+}
+
+.layoutDivider {
+  z-index: 5;
+}
+
+.layoutDivider.layoutX::before {
+  border-left: 3px solid;
+}
+
+.layoutDivider.layoutY::before {
+  border-top: 3px solid;
+}
+
+.layoutDivider[aria-pressed="true"]::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--brand-accent);
+  content: "";
+  transform: translate(-50%, -50%);
+}
+
+.layoutLine:focus-visible {
+  outline: 2px solid var(--brand-accent);
+  outline-offset: -2px;
+}
+
+.compartmentSpan {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 2px;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 2px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 760;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+.compartmentMeasurement {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 2px;
+}
+
+.compartmentSpan input {
+  width: 4ch;
+  min-width: 0;
+  border: 0;
+  border-radius: 3px;
+  padding: 1px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  outline: none;
+}
+
+.compartmentSpan input:hover:not(:disabled),
+.compartmentSpan input:focus {
+  background: color-mix(in srgb, var(--brand-accent) 12%, var(--surface));
+  color: var(--text);
+}
+
+.compartmentSpan input:focus {
+  box-shadow: 0 0 0 1px var(--brand-accent);
+}
+
+.compartmentSpanX {
+  top: 7px;
+  height: 18px;
+}
+
+.compartmentSpanY {
+  left: 7px;
+  width: 18px;
+  align-items: center;
+  overflow: visible;
+}
+
+.compartmentSpanY .compartmentMeasurement {
+  width: max-content;
+  transform: rotate(-90deg);
+}
+
+.dividerEdgeRemove {
+  position: absolute;
+  z-index: 9;
+  display: flex;
+  width: 17px;
+  height: 17px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, #ef4444 65%, var(--border));
+  border-radius: 50%;
+  padding: 0;
+  background: var(--surface);
+  color: #ef4444;
+  cursor: pointer;
+}
+
+.dividerEdgeRemove:hover:not(:disabled) {
+  border-color: #ef4444;
+  background: #ef4444;
+  color: white;
+}
+
+.dividerEdgeRemove:focus-visible {
+  outline: 2px solid #ef4444;
+  outline-offset: 2px;
+}
+
+.dividerEdgeRemove:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.dividerEdgeRemoveX {
+  bottom: -2px;
+  transform: translate(-50%, 50%);
+}
+
+.dividerEdgeRemoveY {
+  right: -2px;
+  transform: translate(50%, -50%);
+}
+
+.edgeSnap {
+  position: absolute;
+  z-index: 4;
+  color: color-mix(in srgb, var(--muted) 75%, transparent);
+  font-size: 7px;
+  font-weight: 800;
+  line-height: 1;
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.edgeSnapX {
+  bottom: 0;
+  border-left: 1px solid color-mix(in srgb, var(--muted) 45%, transparent);
+  padding: 0 0 3px 2px;
+}
+
+.edgeSnapY {
+  right: 0;
+  border-top: 1px solid color-mix(in srgb, var(--muted) 45%, transparent);
+  padding: 2px 3px 0 0;
+}
+
+.edgeSnapActive {
+  color: var(--brand-accent);
+  opacity: 1;
+}
+
+.selectedDividerEditor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.selectedDividerEditor label {
+  display: grid;
+  gap: 6px;
+}
+
+.selectedDividerEditor label > span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 680;
+}
+
+.selectedDividerEditor label > em {
+  color: var(--muted);
+  font-size: 10px;
+  font-style: normal;
+  line-height: 1.25;
+}
+
+.selectedDividerEditor label > div {
+  position: relative;
+}
+
+.selectedDividerEditor input {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 0 35px 0 10px;
+  background: var(--field);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.selectedDividerEditor small {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 760;
+  transform: translateY(-50%);
+}
+
+.selectedDividerEditor > button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 0 10px;
+  background: var(--field);
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 720;
+}
+
+.selectedDividerEditor > button:hover {
+  border-color: var(--brand-accent);
+  color: var(--text);
+}
+
+.advancedDividerSettings {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--border);
+  padding-top: 2px;
+}
+
+.advancedDividerSettings summary {
+  padding: 8px 0;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.advancedDividerGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+  padding-top: 6px;
+}
