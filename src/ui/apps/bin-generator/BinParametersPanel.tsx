@@ -381,6 +381,39 @@ function convertCompartmentDefine(
   return value;
 }
 
+function convertChangedCompartmentDefine(
+  nextValue: OpenScadDefineValue,
+  displayValue: OpenScadDefineValue | undefined,
+  storedValue: OpenScadDefineValue | undefined,
+  convert: (value: number) => number,
+) {
+  if (
+    Array.isArray(nextValue) &&
+    Array.isArray(displayValue) &&
+    Array.isArray(storedValue)
+  ) {
+    return nextValue.map((item, index) =>
+      item === displayValue[index]
+        ? storedValue[index]
+        : typeof item === "number"
+          ? convert(item)
+          : item,
+    );
+  }
+
+  return convertCompartmentDefine(nextValue, convert) ?? 0;
+}
+
+function hasConfiguredDivider(value: OpenScadDefineValue | undefined) {
+  return (
+    typeof value === "string" &&
+    value.split("|").some((entry) => {
+      const position = Number(entry.split(",")[0]?.trim());
+      return Number.isFinite(position) && position > 0;
+    })
+  );
+}
+
 export function BinParametersPanel({
   params,
   draft,
@@ -656,8 +689,12 @@ export function BinParametersPanel({
   const verticalIrregularEnabled = getExtraDefine("vertical_irregular_subdivisions") === true;
   const horizontalIrregularEnabled =
     getExtraDefine("horizontal_irregular_subdivisions") === true;
-  const hasVerticalSeparators = params.verticalChambers > 1;
-  const hasHorizontalSeparators = params.horizontalChambers > 1;
+  const hasVerticalSeparators = verticalIrregularEnabled
+    ? hasConfiguredDivider(getExtraDefine("vertical_separator_config"))
+    : params.verticalChambers > 1;
+  const hasHorizontalSeparators = horizontalIrregularEnabled
+    ? hasConfiguredDivider(getExtraDefine("horizontal_separator_config"))
+    : params.horizontalChambers > 1;
   const hasAnySeparators = hasVerticalSeparators || hasHorizontalSeparators;
   const hasFractionalWidth = !Number.isInteger(
     convertBinSizeValue(params.widthUnits, "widthUnits", params.widthUnit, "u"),
@@ -1001,14 +1038,19 @@ export function BinParametersPanel({
           option={displayOption}
           value={displayValue}
           disabled={isExtraOptionDisabled(option)}
-          onChange={(optionKey, nextValue) =>
+          onChange={(optionKey, nextValue) => {
+            const storedValue = getExtraDefine(option.key);
             updateExtraDefine(
               optionKey,
-              convertCompartmentDefine(nextValue, (value) =>
-                Number(toMillimeters(value, compartmentUnit).toFixed(4)),
-              ) ?? 0,
-            )
-          }
+              convertChangedCompartmentDefine(
+                nextValue,
+                displayValue,
+                storedValue,
+                (value) =>
+                  Number(toMillimeters(value, compartmentUnit).toFixed(4)),
+              ),
+            );
+          }}
         />
       );
     });
