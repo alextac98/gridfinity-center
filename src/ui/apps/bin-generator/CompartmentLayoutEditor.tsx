@@ -2,10 +2,15 @@
 
 import { Plus, Trash2, X } from "lucide-react";
 import { useEffect, useState, type PointerEvent } from "react";
-import type {
-  OpenScadDefineValue,
+import {
+  getMinimumWallThicknessMm,
+  type OpenScadDefineValue,
 } from "@/shared/gridfinityExtended";
-import type { BinGeneratorSettings } from "./binOptions";
+import { GRIDFINITY_STANDARD_CLEARANCE_MM } from "@/shared/gridfinity/constants";
+import {
+  convertBinSizeValue,
+  type BinGeneratorSettings,
+} from "./binOptions";
 import { UnitPicker } from "@/ui/apps/openscad/parameterControls";
 import styles from "./binGenerator.module.css";
 import {
@@ -41,7 +46,8 @@ type AxisConfig = {
   irregularKey:
     | "vertical_irregular_subdivisions"
     | "horizontal_irregular_subdivisions";
-  units: number;
+  lengthMm: number;
+  cavityInsetMm: number;
 };
 
 type CompartmentLayoutEditorProps = {
@@ -52,7 +58,11 @@ type CompartmentLayoutEditorProps = {
   onChange: (params: BinGeneratorSettings) => void;
 };
 
-function parseDividers(value: OpenScadDefineValue | undefined, maxMm: number) {
+function parseDividers(
+  value: OpenScadDefineValue | undefined,
+  cavityInsetMm: number,
+  lengthMm: number,
+) {
   if (typeof value !== "string") {
     return [];
   }
@@ -60,14 +70,15 @@ function parseDividers(value: OpenScadDefineValue | undefined, maxMm: number) {
   return value
     .split("|")
     .map((serialized) => ({
-      positionMm: Number(serialized.split(",")[0]?.trim()),
+      positionMm:
+        Number(serialized.split(",")[0]?.trim()) + cavityInsetMm,
       serialized: serialized.trim(),
     }))
     .filter(
       (divider) =>
         Number.isFinite(divider.positionMm) &&
-        divider.positionMm > 0 &&
-        divider.positionMm < maxMm,
+        divider.positionMm > cavityInsetMm &&
+        divider.positionMm < lengthMm - cavityInsetMm,
     )
     .sort((left, right) => left.positionMm - right.positionMm);
 }
@@ -76,9 +87,13 @@ function formatPosition(value: number) {
   return String(Number(value.toFixed(3)));
 }
 
-function replaceSerializedPosition(divider: Divider, positionMm: number) {
+function replaceSerializedPosition(
+  divider: Divider,
+  positionMm: number,
+  cavityInsetMm: number,
+) {
   const parts = divider.serialized.split(",");
-  parts[0] = formatPosition(positionMm);
+  parts[0] = formatPosition(positionMm - cavityInsetMm);
   return parts.join(",");
 }
 
@@ -89,9 +104,22 @@ function serializeDividers(dividers: Divider[]) {
     .join("|");
 }
 
-function getEqualDividerPositions(chambers: number, units: number) {
-  return Array.from({ length: Math.max(0, chambers - 1) }, (_, index) =>
-    ((index + 1) * units * gridfinityPitchMm) / chambers,
+function getEqualDividerPositions(
+  chambers: number,
+  lengthMm: number,
+  cavityInsetMm: number,
+  dividerThicknessMm: number,
+) {
+  const dividerCount = Math.max(0, chambers - 1);
+  const cavityLengthMm = lengthMm - cavityInsetMm * 2;
+  const compartmentSizeMm =
+    (cavityLengthMm - dividerThicknessMm * dividerCount) / chambers;
+
+  return Array.from({ length: dividerCount }, (_, index) =>
+    cavityInsetMm +
+    (index + 1) * compartmentSizeMm +
+    index * dividerThicknessMm +
+    dividerThicknessMm / 2,
   );
 }
 
@@ -112,18 +140,23 @@ function getDividerThicknessMm(value: OpenScadDefineValue | undefined) {
     return 0;
   }
 
-  const topThickness = value[1] ?? value[0];
-  return typeof topThickness === "number" && Number.isFinite(topThickness)
-    ? Math.max(0, topThickness)
+  const bottomThickness = value[0];
+  return typeof bottomThickness === "number" && Number.isFinite(bottomThickness)
+    ? Math.max(0, bottomThickness)
     : 0;
 }
 
 function getCompartmentSpans(
   dividers: Divider[],
-  maxMm: number,
+  startMm: number,
+  endMm: number,
   dividerThicknessMm: number,
 ) {
-  const boundaries = [0, ...dividers.map((divider) => divider.positionMm), maxMm];
+  const boundaries = [
+    startMm,
+    ...dividers.map((divider) => divider.positionMm),
+    endMm,
+  ];
 
   return boundaries.slice(0, -1).map((start, index) => ({
     start,
@@ -156,20 +189,54 @@ export function CompartmentLayoutEditor({
     index: number;
     value: string;
   } | null>(null);
+  const dividerThicknessMm = getDividerThicknessMm(
+    params.extraDefines.chamber_wall_thickness,
+  );
+  const heightUnits = convertBinSizeValue(
+    params.heightUnits,
+    "heightUnits",
+    params.heightUnit,
+    "u",
+  );
+  const outerWallThicknessMm =
+    params.wallThicknessUnit === "auto"
+      ? getMinimumWallThicknessMm(heightUnits)
+      : convertBinSizeValue(
+          params.wallThicknessMm,
+          "wallThicknessMm",
+          params.wallThicknessUnit,
+          "mm",
+        );
+  const cavityInsetMm =
+    GRIDFINITY_STANDARD_CLEARANCE_MM + outerWallThicknessMm;
   const axes: Record<Axis, AxisConfig> = {
     x: {
       axis: "x",
       chambersKey: "verticalChambers",
       configKey: "vertical_separator_config",
       irregularKey: "vertical_irregular_subdivisions",
-      units: params.widthUnits,
+      lengthMm:
+        convertBinSizeValue(
+          params.widthUnits,
+          "widthUnits",
+          params.widthUnit,
+          "u",
+        ) * gridfinityPitchMm,
+      cavityInsetMm,
     },
     y: {
       axis: "y",
       chambersKey: "horizontalChambers",
       configKey: "horizontal_separator_config",
       irregularKey: "horizontal_irregular_subdivisions",
-      units: params.depthUnits,
+      lengthMm:
+        convertBinSizeValue(
+          params.depthUnits,
+          "depthUnits",
+          params.depthUnit,
+          "u",
+        ) * gridfinityPitchMm,
+      cavityInsetMm,
     },
   };
   const axisState = Object.fromEntries(
@@ -178,28 +245,36 @@ export function CompartmentLayoutEditor({
       const dividers = custom
         ? parseDividers(
             params.extraDefines[axis.configKey],
-            axis.units * gridfinityPitchMm,
+            axis.cavityInsetMm,
+            axis.lengthMm,
           )
-        : getEqualDividerPositions(params[axis.chambersKey], axis.units).map(
-            (positionMm) => ({
-              positionMm,
-              serialized: formatPosition(positionMm),
-            }),
-          );
+        : getEqualDividerPositions(
+            params[axis.chambersKey],
+            axis.lengthMm,
+            axis.cavityInsetMm,
+            dividerThicknessMm,
+          ).map((positionMm) => ({
+            positionMm,
+            serialized: formatPosition(positionMm - axis.cavityInsetMm),
+          }));
 
-      return [axis.axis, { custom, dividers }];
+      return [
+        axis.axis,
+        {
+          custom,
+          dividers,
+          count: custom ? dividers.length + 1 : params[axis.chambersKey],
+        },
+      ];
     }),
-  ) as Record<Axis, { custom: boolean; dividers: Divider[] }>;
-  const dividerThicknessMm = getDividerThicknessMm(
-    params.extraDefines.chamber_wall_thickness,
-  );
+  ) as Record<Axis, { custom: boolean; dividers: Divider[]; count: number }>;
 
   const updateAxis = (axis: AxisConfig, dividers: Divider[]) => {
     const nextDividers = dividers
       .filter(
         (divider) =>
-          divider.positionMm > 0 &&
-          divider.positionMm < axis.units * gridfinityPitchMm,
+          divider.positionMm > axis.cavityInsetMm &&
+          divider.positionMm < axis.lengthMm - axis.cavityInsetMm,
       )
       .sort((left, right) => left.positionMm - right.positionMm);
     const custom = nextDividers.length > 0;
@@ -246,7 +321,10 @@ export function CompartmentLayoutEditor({
 
     updateAxis(axis, [
       ...dividers,
-      { positionMm, serialized: formatPosition(positionMm) },
+      {
+        positionMm,
+        serialized: formatPosition(positionMm - axis.cavityInsetMm),
+      },
     ]);
   };
 
@@ -293,11 +371,11 @@ export function CompartmentLayoutEditor({
     const requestedClearSize = toMillimeters(Number(draft), unit);
     const axis = axes[axisName];
     const dividers = axisState[axisName].dividers;
-    const maxMm = axis.units * gridfinityPitchMm;
+    const maxMm = axis.lengthMm;
     const boundaries = [
-      0,
+      axis.cavityInsetMm,
       ...dividers.map((divider) => divider.positionMm),
-      maxMm,
+      maxMm - axis.cavityInsetMm,
     ];
 
     if (!Number.isFinite(requestedClearSize) || requestedClearSize < 1) {
@@ -318,7 +396,7 @@ export function CompartmentLayoutEditor({
     const nextPosition =
       index < dividers.length
         ? boundaries[index] + requestedCenterSpan
-        : maxMm - requestedCenterSpan;
+        : maxMm - axis.cavityInsetMm - requestedCenterSpan;
     const minimum = boundaries[dividerIndex] + 1;
     const maximum = boundaries[dividerIndex + 2] - 1;
 
@@ -330,7 +408,11 @@ export function CompartmentLayoutEditor({
       candidate === divider
         ? {
             positionMm: nextPosition,
-            serialized: replaceSerializedPosition(candidate, nextPosition),
+            serialized: replaceSerializedPosition(
+              candidate,
+              nextPosition,
+              axis.cavityInsetMm,
+            ),
           }
         : candidate,
     );
@@ -352,8 +434,8 @@ export function CompartmentLayoutEditor({
 
     if (
       !Number.isFinite(nextPositionMm) ||
-      nextPositionMm <= 0 ||
-      nextPositionMm >= axis.units * gridfinityPitchMm
+      nextPositionMm <= axis.cavityInsetMm ||
+      nextPositionMm >= axis.lengthMm - axis.cavityInsetMm
     ) {
       setPositionDraftMm(
         formatCompartmentValue(fromMillimeters(selected.positionMm, unit), unit),
@@ -371,7 +453,11 @@ export function CompartmentLayoutEditor({
         divider === selected
           ? {
               positionMm: nextPositionMm,
-              serialized: replaceSerializedPosition(divider, nextPositionMm),
+              serialized: replaceSerializedPosition(
+                divider,
+                nextPositionMm,
+                axis.cavityInsetMm,
+              ),
             }
           : divider,
       );
@@ -388,7 +474,7 @@ export function CompartmentLayoutEditor({
 
   const addDivider = (axisName: Axis) => {
     const axis = axes[axisName];
-    const currentCount = params[axis.chambersKey];
+    const currentCount = axisState[axisName].count;
 
     if (currentCount >= 8) {
       return;
@@ -399,10 +485,11 @@ export function CompartmentLayoutEditor({
       return;
     }
 
-    const maxMm = axis.units * gridfinityPitchMm;
+    const maxMm = axis.lengthMm;
     const spans = getCompartmentSpans(
       axisState[axisName].dividers,
-      maxMm,
+      axis.cavityInsetMm,
+      maxMm - axis.cavityInsetMm,
       dividerThicknessMm,
     );
     const largestSpan = spans.reduce((largest, span) =>
@@ -412,7 +499,7 @@ export function CompartmentLayoutEditor({
 
     const divider = {
       positionMm,
-      serialized: formatPosition(positionMm),
+      serialized: formatPosition(positionMm - axis.cavityInsetMm),
     };
     updateAxis(axis, [...axisState[axisName].dividers, divider]);
     selectDivider(axisName, divider);
@@ -434,7 +521,7 @@ export function CompartmentLayoutEditor({
     }
 
     const axis = axes[axisName];
-    const maxMm = axis.units * gridfinityPitchMm;
+    const maxMm = axis.lengthMm;
     const rect = surface.getBoundingClientRect();
     const ratio =
       axisName === "x"
@@ -469,11 +556,14 @@ export function CompartmentLayoutEditor({
     const dividerIndex = dividers.findIndex((candidate) =>
       isSamePosition(candidate.positionMm, divider.positionMm),
     );
-    const minimum = dividerIndex > 0 ? dividers[dividerIndex - 1].positionMm + 1 : 1;
+    const minimum =
+      dividerIndex > 0
+        ? dividers[dividerIndex - 1].positionMm + 1
+        : axis.cavityInsetMm + 1;
     const maximum =
       dividerIndex < dividers.length - 1
         ? dividers[dividerIndex + 1].positionMm - 1
-        : maxMm - 1;
+        : maxMm - axis.cavityInsetMm - 1;
     const positionMm = Math.min(maximum, Math.max(minimum, requestedPosition));
 
     if (isSamePosition(positionMm, divider.positionMm)) {
@@ -484,7 +574,11 @@ export function CompartmentLayoutEditor({
       candidate === divider
         ? {
             positionMm,
-            serialized: replaceSerializedPosition(candidate, positionMm),
+            serialized: replaceSerializedPosition(
+              candidate,
+              positionMm,
+              axis.cavityInsetMm,
+            ),
           }
         : candidate,
     );
@@ -503,7 +597,7 @@ export function CompartmentLayoutEditor({
           <strong>Compartment Layout</strong>
           <span>Drag freely inside. Move to an edge to snap.</span>
         </div>
-        <b>{params.verticalChambers * params.horizontalChambers} total</b>
+        <b>{axisState.x.count * axisState.y.count} total</b>
       </div>
 
       <UnitPicker
@@ -522,17 +616,17 @@ export function CompartmentLayoutEditor({
         <div
           aria-label="Compartment layout"
           className={`${styles.layoutCanvas} ${
-            params.depthUnits > params.widthUnits
+            axes.y.lengthMm > axes.x.lengthMm
               ? styles.layoutCanvasTall
               : styles.layoutCanvasWide
           } ${disabled ? styles.layoutCanvasDisabled : ""}`}
           role="group"
-          style={{ aspectRatio: `${params.widthUnits} / ${params.depthUnits}` }}
+          style={{ aspectRatio: `${axes.x.lengthMm} / ${axes.y.lengthMm}` }}
         >
         <button
           aria-label="Add X divider"
           className={`${styles.axisAddButton} ${styles.axisAddButtonX}`}
-          disabled={disabled || params.horizontalChambers >= 8}
+          disabled={disabled || axisState.y.count >= 8}
           title="Add an X divider"
           type="button"
           onClick={() => addDivider("y")}
@@ -545,7 +639,7 @@ export function CompartmentLayoutEditor({
         <button
           aria-label="Add Y divider"
           className={`${styles.axisAddButton} ${styles.axisAddButtonY}`}
-          disabled={disabled || params.verticalChambers >= 8}
+          disabled={disabled || axisState.x.count >= 8}
           title="Add a Y divider"
           type="button"
           onClick={() => addDivider("x")}
@@ -572,10 +666,11 @@ export function CompartmentLayoutEditor({
             )),
           )}
           {(["x", "y"] as const).flatMap((axisName) => {
-            const maxMm = axes[axisName].units * gridfinityPitchMm;
+            const maxMm = axes[axisName].lengthMm;
             const spans = getCompartmentSpans(
               axisState[axisName].dividers,
-              maxMm,
+              axes[axisName].cavityInsetMm,
+              maxMm - axes[axisName].cavityInsetMm,
               dividerThicknessMm,
             );
 
@@ -649,7 +744,7 @@ export function CompartmentLayoutEditor({
             });
           })}
           {(["x", "y"] as const).flatMap((axisName) => {
-            const maxMm = axes[axisName].units * gridfinityPitchMm;
+            const maxMm = axes[axisName].lengthMm;
             const dividers = axisState[axisName].dividers;
 
             return dividers.map((divider, index) => {
@@ -698,7 +793,7 @@ export function CompartmentLayoutEditor({
           })}
         </div>
         {(["x", "y"] as const).flatMap((axisName) => {
-          const maxMm = axes[axisName].units * gridfinityPitchMm;
+          const maxMm = axes[axisName].lengthMm;
 
           return axisState[axisName].dividers.map((divider, index) => {
             const isSelected =
@@ -746,10 +841,14 @@ export function CompartmentLayoutEditor({
                 disabled={disabled}
                 inputMode="decimal"
                 max={fromMillimeters(
-                  axes[selectedDivider.axis].units * gridfinityPitchMm,
+                  axes[selectedDivider.axis].lengthMm -
+                    axes[selectedDivider.axis].cavityInsetMm,
                   unit,
                 )}
-                min={0}
+                min={fromMillimeters(
+                  axes[selectedDivider.axis].cavityInsetMm,
+                  unit,
+                )}
                 step={compartmentUnitStep(unit)}
                 type="number"
                 value={positionDraftMm}
