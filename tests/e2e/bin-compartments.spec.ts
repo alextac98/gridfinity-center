@@ -67,10 +67,10 @@ test("successive add actions create thirds and quarters", async ({ page }) => {
 
   await expect(page.getByText("3 total", { exact: true })).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Select X divider at 28.233 mm" }),
+    page.getByRole("button", { name: "Select X divider at 28 mm" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Select X divider at 55.767 mm" }),
+    page.getByRole("button", { name: "Select X divider at 56 mm" }),
   ).toBeVisible();
 
   await expect
@@ -120,7 +120,7 @@ test("edits and removes a selected divider without exposing the delimiter", asyn
         return settings?.params?.extraDefines?.vertical_separator_config;
       }),
     )
-    .toBe("30.3");
+    .toBe("31.5");
 
   await page
     .getByRole("button", {
@@ -222,12 +222,12 @@ test("edits a compartment measurement directly in the diagram", async ({
     name: "X compartment 1 size mm",
     exact: true,
   });
-  await expect(size).toHaveValue("19.3");
+  await expect(size).toHaveValue("20.5");
   await size.fill("30");
   await size.blur();
 
   await expect(
-    page.getByRole("button", { name: "Select Y divider at 31.7 mm" }),
+    page.getByRole("button", { name: "Select Y divider at 30.5 mm" }),
   ).toBeVisible();
   await expect(size).toHaveValue("30");
 });
@@ -271,12 +271,12 @@ test("edits diagram measurements in inches while storing millimeters", async ({
     name: "X compartment 1 size in",
     exact: true,
   });
-  await expect(size).toHaveValue("0.76");
+  await expect(size).toHaveValue("0.807");
   await size.fill("1");
   await size.blur();
 
   await expect(
-    page.getByRole("button", { name: "Select Y divider at 1.067 in" }),
+    page.getByRole("button", { name: "Select Y divider at 1.02 in" }),
   ).toBeVisible();
   await expect
     .poll(async () =>
@@ -306,25 +306,6 @@ test("converts dimensional compartment parameters with the unit picker", async (
 
   await page.getByRole("button", { name: "Inches" }).click();
 
-  const bottomThickness = page.getByLabel(
-    "Divider Wall Thickness Bottom in",
-    { exact: true },
-  );
-  await bottomThickness.fill("0.04");
-
-  await expect
-    .poll(async () =>
-      page.evaluate(() => {
-        const stored = window.localStorage.getItem(
-          "gridfinity-bin-generator-settings",
-        );
-        const settings = stored ? JSON.parse(stored) : null;
-
-        return settings?.params?.extraDefines?.chamber_wall_thickness;
-      }),
-    )
-    .toEqual([1.016, 1]);
-
   const headroom = page.getByLabel(/Divider Headroom/);
   await headroom.fill("0.1");
 
@@ -346,54 +327,4 @@ test("converts dimensional compartment parameters with the unit picker", async (
     "step",
     "1",
   );
-});
-
-test("serializes edited divider positions relative to the cavity", async ({
-  page,
-}) => {
-  await page.getByRole("button", { name: "Add Y divider" }).click();
-  await page
-    .getByRole("button", { name: "Select Y divider at 21 mm" })
-    .click();
-
-  const position = page.getByRole("spinbutton", {
-    name: "Y divider position mm",
-    exact: true,
-  });
-  await position.focus();
-  await position.blur();
-
-  await expect
-    .poll(async () =>
-      page.evaluate(() => {
-        const stored = window.localStorage.getItem(
-          "gridfinity-bin-generator-settings",
-        );
-        const settings = stored ? JSON.parse(stored) : null;
-
-        return settings?.params?.extraDefines?.vertical_separator_config;
-      }),
-    )
-    .toBe("19.8");
-});
-
-test("derives custom compartment totals from the separator config", async ({
-  page,
-}) => {
-  await page.evaluate(() => {
-    const key = "gridfinity-bin-generator-settings";
-    const stored = window.localStorage.getItem(key);
-    const settings = stored ? JSON.parse(stored) : null;
-
-    settings.params.verticalChambers = 1;
-    settings.params.extraDefines.vertical_irregular_subdivisions = true;
-    settings.params.extraDefines.vertical_separator_config = "10|20";
-    window.localStorage.setItem(key, JSON.stringify(settings));
-  });
-  await page.reload();
-
-  await expect(page.getByText("3 total", { exact: true })).toBeVisible();
-  await expect(
-    page.getByLabel("Divider Wall Thickness Bottom mm", { exact: true }),
-  ).toBeEnabled();
 });
