@@ -43,14 +43,14 @@ export const numberFields: Record<
   verticalChambers: {
     label: "X Compartments",
     min: 1,
-    max: 8,
+    max: 100,
     step: 1,
     suffix: "ct",
   },
   horizontalChambers: {
     label: "Y Compartments",
     min: 1,
-    max: 8,
+    max: 100,
     step: 1,
     suffix: "ct",
   },

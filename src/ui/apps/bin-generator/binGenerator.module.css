@@ -18,7 +18,7 @@
 
 .compartmentEditorHeader strong {
   color: var(--text);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 760;
 }
 
@@ -46,7 +46,7 @@
   height: clamp(250px, 35vh, 350px);
   align-items: center;
   justify-content: center;
-  padding: 34px 0 0 34px;
+  padding: 20px 4px 36px 38px;
 }
 
 .layoutCanvas {
@@ -79,89 +79,6 @@
   opacity: 0.48;
 }
 
-.axisAddButton {
-  position: absolute;
-  z-index: 8;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 28px;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font: inherit;
-  font-weight: 800;
-}
-
-.axisAddButton:hover:not(:disabled) {
-  color: var(--brand-accent);
-}
-
-.axisAddButton i {
-  flex: 1 1 auto;
-  border-radius: 999px;
-  background: currentColor;
-}
-
-.axisAddButton svg {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  stroke-width: 3;
-  transform: translate(-50%, -50%);
-}
-
-.axisAddButton:disabled {
-  opacity: 0.42;
-  cursor: not-allowed;
-}
-
-.axisAddButtonX {
-  bottom: 100%;
-  left: 0;
-  width: 100%;
-  height: 30px;
-}
-
-.axisAddButtonX i {
-  height: 2px;
-}
-
-.axisAddButtonY {
-  top: 0;
-  right: 100%;
-  width: 30px;
-  height: 100%;
-  flex-direction: column;
-}
-
-.axisAddButtonY i {
-  width: 2px;
-}
-
-.axisAddLabel {
-  position: absolute;
-  z-index: 1;
-  padding: 2px;
-  background: var(--surface);
-  font-size: 10px;
-  line-height: 1;
-}
-
-.axisAddButtonX .axisAddLabel {
-  top: 50%;
-  left: 0;
-  transform: translateY(-50%);
-}
-
-.axisAddButtonY .axisAddLabel {
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
 .layoutSurface {
   position: absolute;
   top: 0;
@@ -170,6 +87,143 @@
   left: 0;
   overflow: hidden;
   border-radius: 8px;
+  cursor: crosshair;
+}
+
+.axisControls {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+}
+
+.axisControl {
+  position: absolute;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--brand-accent);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+  pointer-events: auto;
+}
+
+.axisControl::before,
+.axisControl::after {
+  position: absolute;
+  content: "";
+}
+
+.axisControl::before {
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.axisControlX {
+  --axis-color: #ff6f7d;
+
+  top: calc(100% + 6px);
+  left: -19px;
+  width: min(64px, 44%);
+  height: 25px;
+  color: var(--axis-color);
+}
+
+.axisControlX::before {
+  top: 12px;
+  right: 15px;
+  left: 0;
+  height: 2px;
+}
+
+.axisControlX::after {
+  top: 8px;
+  right: 14px;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-left: 7px solid currentColor;
+}
+
+.axisControlY {
+  --axis-color: #38b85a;
+
+  right: calc(100% + 6px);
+  bottom: -18px;
+  width: 25px;
+  height: min(72px, 27%);
+  color: var(--axis-color);
+}
+
+.axisControlY::before {
+  top: 15px;
+  bottom: 0;
+  left: 12px;
+  width: 2px;
+}
+
+.axisControlY::after {
+  top: 14px;
+  left: 8px;
+  border-right: 5px solid transparent;
+  border-bottom: 7px solid currentColor;
+  border-left: 5px solid transparent;
+}
+
+.axisControlLabel {
+  position: absolute;
+  color: currentColor;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.axisControlX .axisControlLabel {
+  top: 16px;
+  left: 23px;
+}
+
+.axisControlY .axisControlLabel {
+  bottom: 24px;
+  left: -5px;
+}
+
+.axisControlPlus {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 4px color-mix(in srgb, black 18%, transparent);
+}
+
+.axisControlX .axisControlPlus {
+  top: 3px;
+  right: -8px;
+}
+
+.axisControlY .axisControlPlus {
+  top: -8px;
+  left: 3px;
+}
+
+.axisControl:hover:not(:disabled) {
+  color: color-mix(in srgb, var(--axis-color) 78%, white);
+}
+
+.axisControl:focus-visible {
+  outline: 2px solid var(--brand-accent);
+  outline-offset: 2px;
+}
+
+.axisControl:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
 }
 
 .layoutLine {
@@ -222,6 +276,49 @@
 
 .layoutDivider {
   z-index: 5;
+  cursor: grab;
+}
+
+.layoutDivider:hover::before {
+  box-shadow:
+    0 0 5px color-mix(in srgb, var(--brand-accent) 52%, transparent),
+    0 0 12px color-mix(in srgb, var(--brand-accent) 38%, transparent);
+}
+
+.layoutDivider[data-dragging="true"] {
+  cursor: grabbing;
+}
+
+.layoutDividerPreview {
+  z-index: 4;
+  color: color-mix(in srgb, var(--brand-accent) 72%, transparent);
+  pointer-events: none;
+}
+
+.layoutDividerPreview::before {
+  border-color: currentColor;
+  border-style: dashed;
+}
+
+.layoutDividerPreview.layoutX::before {
+  border-left-width: 2px;
+}
+
+.layoutDividerPreview.layoutY::before {
+  border-top-width: 2px;
+}
+
+.layoutDividerPreview svg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  box-sizing: content-box;
+  border-radius: 50%;
+  padding: 3px;
+  background: var(--brand-accent);
+  color: white;
+  stroke-width: 3;
+  transform: translate(-50%, -50%);
 }
 
 .layoutDivider.layoutX::before {
@@ -232,17 +329,12 @@
   border-top: 3px solid;
 }
 
-.layoutDivider[aria-pressed="true"]::after {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 9px;
-  height: 9px;
-  border: 2px solid var(--surface);
-  border-radius: 50%;
-  background: var(--brand-accent);
-  content: "";
-  transform: translate(-50%, -50%);
+.layoutDivider[aria-pressed="true"]::before {
+  border-color: color-mix(in srgb, var(--brand-accent) 88%, white);
+  box-shadow:
+    0 0 4px color-mix(in srgb, var(--brand-accent) 82%, transparent),
+    0 0 14px color-mix(in srgb, var(--brand-accent) 66%, transparent),
+    0 0 24px color-mix(in srgb, var(--brand-accent) 40%, transparent);
 }
 
 .layoutLine:focus-visible {
@@ -275,7 +367,6 @@
 }
 
 .compartmentSpan input {
-  width: 4ch;
   min-width: 0;
   border: 0;
   border-radius: 3px;
@@ -359,24 +450,44 @@
 .edgeSnap {
   position: absolute;
   z-index: 4;
-  color: color-mix(in srgb, var(--muted) 75%, transparent);
-  font-size: 7px;
-  font-weight: 800;
+  color: color-mix(in srgb, var(--text) 94%, transparent);
+  font-size: 13px;
+  font-weight: 850;
   line-height: 1;
-  opacity: 0.65;
+  min-width: 1em;
+  opacity: 0.92;
   pointer-events: none;
+  text-align: center;
 }
 
 .edgeSnapX {
+  bottom: 3px;
+  padding-bottom: 7px;
+  transform: translateX(-50%);
+}
+
+.edgeSnapX::before {
+  position: absolute;
   bottom: 0;
-  border-left: 1px solid color-mix(in srgb, var(--muted) 45%, transparent);
-  padding: 0 0 3px 2px;
+  left: 50%;
+  height: 5px;
+  border-left: 2px solid color-mix(in srgb, var(--text) 82%, transparent);
+  content: "";
 }
 
 .edgeSnapY {
+  right: 3px;
+  padding-right: 7px;
+  transform: translateY(-50%);
+}
+
+.edgeSnapY::before {
+  position: absolute;
+  top: 50%;
   right: 0;
-  border-top: 1px solid color-mix(in srgb, var(--muted) 45%, transparent);
-  padding: 2px 3px 0 0;
+  width: 5px;
+  border-top: 2px solid color-mix(in srgb, var(--text) 82%, transparent);
+  content: "";
 }
 
 .edgeSnapActive {
@@ -387,7 +498,7 @@
 .selectedDividerEditor {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
+  align-items: center;
   gap: 8px;
   border-top: 1px solid var(--border);
   padding-top: 10px;
@@ -395,20 +506,16 @@
 
 .selectedDividerEditor label {
   display: grid;
-  gap: 6px;
+  grid-template-columns: auto minmax(72px, 1fr);
+  align-items: center;
+  gap: 8px;
 }
 
 .selectedDividerEditor label > span {
   color: var(--muted);
   font-size: 11px;
   font-weight: 680;
-}
-
-.selectedDividerEditor label > em {
-  color: var(--muted);
-  font-size: 10px;
-  font-style: normal;
-  line-height: 1.25;
+  white-space: nowrap;
 }
 
 .selectedDividerEditor label > div {
@@ -440,12 +547,13 @@
 
 .selectedDividerEditor > button {
   display: flex;
+  width: 36px;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
   min-height: 36px;
   border: 1px solid var(--border-strong);
   border-radius: 7px;
-  padding: 0 10px;
+  padding: 0;
   background: var(--field);
   color: var(--muted);
   cursor: pointer;
