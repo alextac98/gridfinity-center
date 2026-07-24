@@ -48,6 +48,105 @@ test("restores label settings after a reload", async ({ page }) => {
   await expect(page.getByLabel("Additional Text")).toHaveValue("Reload me");
 });
 
+test("selects and restores independent drive and head artwork", async ({
+  page,
+}) => {
+  const preview = page.getByTestId("label-preview-transform");
+  const drive = page.getByLabel("Drive Type");
+  const head = page.getByLabel("Head Profile");
+
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.localStorage.getItem("gridfinity-label-generator-settings"),
+      ),
+    )
+    .not.toBeNull();
+  await expect(drive).toHaveValue("hex");
+  await expect(head).toHaveValue("socket");
+
+  await drive.selectOption("phillips");
+  await head.selectOption("countersunk");
+
+  await expect(
+    preview.locator('[data-artwork-profile="top"]'),
+  ).toHaveAttribute("data-artwork-id", "phillips");
+  await expect(
+    preview.locator('[data-artwork-profile="side"]'),
+  ).toHaveAttribute("data-artwork-id", "countersunk");
+
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const storedSettings = window.localStorage.getItem(
+          "gridfinity-label-generator-settings",
+        );
+        const parsed = storedSettings ? JSON.parse(storedSettings) : null;
+
+        return parsed
+          ? {
+              driveId: parsed.driveId,
+              headProfileId: parsed.headProfileId,
+            }
+          : null;
+      }),
+    )
+    .toEqual({
+      driveId: "phillips",
+      headProfileId: "countersunk",
+    });
+
+  await page.reload();
+  await expect(page.getByLabel("Drive Type")).toHaveValue("phillips");
+  await expect(page.getByLabel("Head Profile")).toHaveValue("countersunk");
+});
+
+test("keeps fastener artwork inside its preview slots", async ({ page }) => {
+  const preview = page.getByTestId("label-preview-transform");
+
+  await page.getByRole("button", { name: /70 x 25/ }).click();
+  await page.getByLabel("Head Profile").selectOption("button");
+
+  for (const profile of ["top", "side"]) {
+    const artworkFits = await preview
+      .locator(`[data-artwork-profile="${profile}"]`)
+      .evaluate((artwork, artworkProfile) => {
+        const artworkRect = artwork.getBoundingClientRect();
+        const container =
+          artworkProfile === "top"
+            ? artwork.parentElement?.parentElement
+            : artwork.parentElement;
+        const containerRect = container?.getBoundingClientRect();
+
+        return Boolean(
+          containerRect &&
+            artworkRect.top >= containerRect.top &&
+            artworkRect.right <= containerRect.right &&
+            artworkRect.bottom <= containerRect.bottom &&
+            artworkRect.left >= containerRect.left,
+        );
+      }, profile);
+
+    expect(artworkFits).toBe(true);
+
+    const graphicFits = await preview
+      .locator(`[data-artwork-profile="${profile}"] svg`)
+      .evaluate((svg) => {
+        const graphic = (svg as SVGSVGElement).getBBox();
+        const viewBox = (svg as SVGSVGElement).viewBox.baseVal;
+
+        return (
+          graphic.x >= viewBox.x &&
+          graphic.y >= viewBox.y &&
+          graphic.x + graphic.width <= viewBox.x + viewBox.width &&
+          graphic.y + graphic.height <= viewBox.y + viewBox.height
+        );
+      });
+
+    expect(graphicFits).toBe(true);
+  }
+});
+
 test("allows partial bin height units", async ({ page }) => {
   await page.getByRole("tab", { name: /Bin Generator/ }).click();
   await expect(page).toHaveURL(/\/bin-generator$/);

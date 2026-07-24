@@ -164,6 +164,11 @@
   gap: 8px;
 }
 
+.artworkTypeControls {
+  grid-template-columns: 1fr;
+  margin-top: 12px;
+}
+
 .fieldLabel,
 .field span {
   color: var(--text);
@@ -935,8 +940,7 @@
 }
 
 .labelTopRow {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  display: flex;
   min-width: 0;
   min-height: 0;
   gap: clamp(5px, 5cqh, 10px);
@@ -945,18 +949,24 @@
 
 .topProfileSlot {
   display: grid;
+  flex: 0 0 auto;
   place-items: center;
-  aspect-ratio: 1;
+  width: auto;
   height: 100%;
+  aspect-ratio: 1;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .label .topProfilePicture {
-  width: auto;
+  width: 100%;
   height: 100%;
+  aspect-ratio: auto;
 }
 
 .secondaryProfileSlot {
+  position: relative;
   display: grid;
   min-width: 0;
   min-height: 0;
@@ -965,8 +975,11 @@
 }
 
 .secondaryProfileSlot .sideProfilePicture {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
+  aspect-ratio: auto;
 }
 
 .secondaryProfileSlot .sideProfilePicture svg {
@@ -989,6 +1002,7 @@
 
 .labelCopy {
   display: grid;
+  flex: 1 1 auto;
   grid-template-rows: minmax(0, 0.68fr) minmax(0, 0.32fr);
   align-items: stretch;
   min-width: 0;

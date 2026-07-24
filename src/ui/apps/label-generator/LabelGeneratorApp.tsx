@@ -34,6 +34,15 @@ import {
 } from "@/ui/apps/openscad/OpenScadGeneratorShell";
 import { CollapsibleSection } from "@/ui/apps/openscad/parameterControls";
 import type { GridfinityAppProps } from "../types";
+import {
+  driveOptions,
+  getDriveSvgMarkup,
+  getHardwareSvgMarkup,
+  getHeadProfileSvgMarkup,
+  headProfileOptions,
+  type DriveId,
+  type HeadProfileId,
+} from "./artwork/fastenerArtwork";
 import styles from "./label-generator.module.css";
 
 type FastenerId =
@@ -196,6 +205,22 @@ const itemTypeDescriptions: Record<ItemTypeId, string> = {
   washer: "Flat round spacing and load washers",
   custom: "User supplied artwork and label text",
 };
+
+const defaultArtworkByFastener: Record<
+  FastenerId,
+  { driveId: DriveId; headProfileId: HeadProfileId }
+> = {
+  "socket-cap": { driveId: "hex", headProfileId: "socket" },
+  "button-head": { driveId: "hex", headProfileId: "button" },
+  "flat-head": { driveId: "hex", headProfileId: "countersunk" },
+  "hex-bolt": { driveId: "external-hex", headProfileId: "hex" },
+  nut: { driveId: "external-hex", headProfileId: "hex" },
+  washer: { driveId: "slot", headProfileId: "wafer" },
+};
+
+function isScrewFastener(id: FastenerId) {
+  return id !== "nut" && id !== "washer";
+}
 
 // Edit this map to control pitch/length suggestions for each thread size.
 // `standard` means the coarse pitch for that size and is intentionally omitted
@@ -464,6 +489,8 @@ const detailFieldsByItemType: Record<ItemTypeId, DetailFieldId[]> = {
 
 const defaults = {
   fastenerId: "socket-cap" as FastenerId,
+  driveId: defaultArtworkByFastener["socket-cap"].driveId,
+  headProfileId: defaultArtworkByFastener["socket-cap"].headProfileId,
   itemName: "Custom item",
   sizeId: "35x12",
   customWidthMm: 35,
@@ -552,6 +579,28 @@ function readStoredLabelSettings(): LabelGeneratorSettings {
         parsed.fastenerId,
         defaults.fastenerId,
         fasteners.map((fastener) => fastener.id),
+      ),
+      driveId: readString(
+        parsed.driveId,
+        defaultArtworkByFastener[
+          readString(
+            parsed.fastenerId,
+            defaults.fastenerId,
+            fasteners.map((fastener) => fastener.id),
+          )
+        ].driveId,
+        driveOptions.map((option) => option.id),
+      ),
+      headProfileId: readString(
+        parsed.headProfileId,
+        defaultArtworkByFastener[
+          readString(
+            parsed.fastenerId,
+            defaults.fastenerId,
+            fasteners.map((fastener) => fastener.id),
+          )
+        ].headProfileId,
+        headProfileOptions.map((option) => option.id),
       ),
       itemName:
         typeof parsed.itemName === "string"
@@ -674,65 +723,40 @@ function getStandardText(standard: string, mode: StandardMode) {
   return [parts.iso, parts.din].filter(Boolean).join(" / ");
 }
 
-function getSideProfileSvgMarkup(id: FastenerId) {
-  if (id === "nut") {
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 70"><path d="M34 14h152l24 21-24 21H34L10 35 34 14Z" fill="white" stroke="black" stroke-width="7" stroke-linejoin="round"/><path d="M76 18c-13 11-13 23 0 34M144 18c13 11 13 23 0 34" fill="none" stroke="black" stroke-width="6" stroke-linecap="round"/><path d="M55 35h110" stroke="black" stroke-width="4" stroke-linecap="round"/></svg>`;
-  }
-
-  if (id === "washer") {
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 70"><path d="M20 27h180v16H20V27Z" fill="white" stroke="black" stroke-width="7" stroke-linejoin="round"/><path d="M72 28v14M148 28v14" stroke="black" stroke-width="5"/></svg>`;
-  }
-
-  const head =
-    id === "hex-bolt"
-      ? `<path d="M15 20h27l14 20-14 20H15L4 40 15 20Z" fill="white" stroke="black" stroke-width="6" stroke-linejoin="round"/>`
-      : id === "flat-head"
-        ? `<path d="M6 49 32 18h18l10 31H6Z" fill="white" stroke="black" stroke-width="6" stroke-linejoin="round"/><path d="M24 42h20" stroke="black" stroke-width="5" stroke-linecap="round"/>`
-      : id === "button-head"
-        ? `<path d="M6 45C10 18 49 18 55 45v13H6V45Z" fill="white" stroke="black" stroke-width="6" stroke-linejoin="round"/><path d="M22 39h18" stroke="black" stroke-width="5" stroke-linecap="round"/>`
-        : `<path d="M8 15h48v50H8V15Z" fill="white" stroke="black" stroke-width="6" stroke-linejoin="round"/><path d="M22 28h20M22 40h20M22 52h20" stroke="black" stroke-width="4" stroke-linecap="round"/>`;
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 70">${head}<path d="M53 29h147l9 6-9 6H53V29Z" fill="white" stroke="black" stroke-width="6" stroke-linejoin="round"/><path d="M66 29v12M76 29v12M86 29v12M96 29v12M106 29v12M116 29v12M126 29v12M136 29v12M146 29v12M156 29v12M166 29v12M176 29v12M186 29v12" stroke="black" stroke-width="2.4"/><path d="M59 22h139M59 48h139" stroke="black" stroke-width="3" stroke-linecap="round"/></svg>`;
-}
-
-function getTopProfileSvgMarkup(id: FastenerId) {
-  if (id === "nut") {
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M28 10h44l23 40-23 40H28L5 50 28 10Z" fill="white" stroke="black" stroke-width="7" stroke-linejoin="round"/><circle cx="50" cy="50" r="20" fill="white" stroke="black" stroke-width="7"/><path d="M35 24h30M35 76h30" stroke="black" stroke-width="4" stroke-linecap="round"/></svg>`;
-  }
-
-  if (id === "washer") {
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="39" fill="white" stroke="black" stroke-width="7"/><circle cx="50" cy="50" r="17" fill="white" stroke="black" stroke-width="7"/></svg>`;
-  }
-
-  const outer =
-    id === "hex-bolt"
-      ? `<path d="M28 10h44l23 40-23 40H28L5 50 28 10Z" fill="white" stroke="black" stroke-width="7" stroke-linejoin="round"/>`
-      : id === "flat-head"
-        ? `<circle cx="50" cy="50" r="39" fill="white" stroke="black" stroke-width="7"/><path d="M31 50h38" stroke="black" stroke-width="7" stroke-linecap="round"/>`
-      : id === "button-head"
-        ? `<circle cx="50" cy="50" r="38" fill="white" stroke="black" stroke-width="7"/><circle cx="50" cy="50" r="24" fill="none" stroke="black" stroke-width="3" opacity=".55"/>`
-        : `<circle cx="50" cy="50" r="39" fill="white" stroke="black" stroke-width="7"/>`;
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">${outer}<path d="M50 28 69 39v22L50 72 31 61V39l19-11Z" fill="white" stroke="black" stroke-width="6" stroke-linejoin="round"/></svg>`;
-}
-
 function FastenerPicture({
+  driveId,
+  headProfileId,
   id,
   profile,
 }: {
+  driveId?: DriveId;
+  headProfileId?: HeadProfileId;
   id: FastenerId;
   profile: "side" | "top";
 }) {
+  const artwork = defaultArtworkByFastener[id];
+  const markup =
+    id === "nut" || id === "washer"
+      ? getHardwareSvgMarkup(id, profile)
+      : profile === "top"
+        ? getDriveSvgMarkup(driveId ?? artwork.driveId)
+        : getHeadProfileSvgMarkup(headProfileId ?? artwork.headProfileId);
+  const artworkId =
+    id === "nut" || id === "washer"
+      ? id
+      : profile === "top"
+        ? (driveId ?? artwork.driveId)
+        : (headProfileId ?? artwork.headProfileId);
+
   return (
     <span
       className={
         profile === "top" ? styles.topProfilePicture : styles.sideProfilePicture
       }
+      data-artwork-id={artworkId}
+      data-artwork-profile={profile}
       dangerouslySetInnerHTML={{
-        __html:
-          profile === "top"
-            ? getTopProfileSvgMarkup(id)
-            : getSideProfileSvgMarkup(id),
+        __html: markup,
       }}
     />
   );
@@ -1043,6 +1067,8 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
   } | null>(null);
   const [hasLoadedStoredSettings, setHasLoadedStoredSettings] = useState(false);
   const [fastenerId, setFastenerId] = useState(defaults.fastenerId);
+  const [driveId, setDriveId] = useState(defaults.driveId);
+  const [headProfileId, setHeadProfileId] = useState(defaults.headProfileId);
   const [itemName, setItemName] = useState(defaults.itemName);
   const [sizeId, setSizeId] = useState(defaults.sizeId);
   const [customWidthMm, setCustomWidthMm] = useState(defaults.customWidthMm);
@@ -1091,6 +1117,10 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
   });
 
   const fastener = getFastener(fastenerId);
+  const defaultArtwork = defaultArtworkByFastener[fastenerId];
+  const isArtworkVerified =
+    driveId === defaultArtwork.driveId &&
+    headProfileId === defaultArtwork.headProfileId;
   const selectedItemTypeId: ItemTypeId = isCustomArtwork
     ? "custom"
     : fastenerId;
@@ -1148,7 +1178,9 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
       : [trimmedThreadSize, trimmedLength, displayPitch]
           .filter(Boolean)
           .join(" x ");
-  const standardParts = getStandardParts(fastener.standard);
+  const standardParts = getStandardParts(
+    isArtworkVerified ? fastener.standard : "",
+  );
   const activeStandardMode =
     standardMode === "din" && !standardParts.din ? "both" : standardMode;
   const standardText = getStandardText(fastener.standard, activeStandardMode);
@@ -1204,6 +1236,8 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
       const settings = readStoredLabelSettings();
 
       setFastenerId(settings.fastenerId);
+      setDriveId(settings.driveId);
+      setHeadProfileId(settings.headProfileId);
       setItemName(settings.itemName);
       setSizeId(settings.sizeId);
       setCustomWidthMm(settings.customWidthMm);
@@ -1237,6 +1271,8 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
 
     writeStoredLabelSettings({
       fastenerId,
+      driveId,
+      headProfileId,
       itemName,
       sizeId,
       customWidthMm,
@@ -1261,8 +1297,10 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
     customSecondaryImage,
     customHeightMm,
     customWidthMm,
+    driveId,
     fastenerId,
     hasLoadedStoredSettings,
+    headProfileId,
     isCustomArtwork,
     itemName,
     length,
@@ -1412,6 +1450,8 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
 
   function resetLabel() {
     setFastenerId(defaultLabelSettings.fastenerId);
+    setDriveId(defaultLabelSettings.driveId);
+    setHeadProfileId(defaultLabelSettings.headProfileId);
     setItemName(defaultLabelSettings.itemName);
     setSizeId(defaultLabelSettings.sizeId);
     setCustomWidthMm(defaultLabelSettings.customWidthMm);
@@ -1454,7 +1494,11 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
     }
 
     if (itemTypeOptions.includes(itemType as ItemTypeId)) {
-      setFastenerId(itemType as FastenerId);
+      const nextFastenerId = itemType as FastenerId;
+      const nextArtwork = defaultArtworkByFastener[nextFastenerId];
+      setFastenerId(nextFastenerId);
+      setDriveId(nextArtwork.driveId);
+      setHeadProfileId(nextArtwork.headProfileId);
       setIsCustomArtwork(false);
     }
   }
@@ -1594,7 +1638,14 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
 
   function renderArtworkFallback(profile: "side" | "top") {
     if (!isCustomArtwork) {
-      return <FastenerPicture id={fastenerId} profile={profile} />;
+      return (
+        <FastenerPicture
+          driveId={driveId}
+          headProfileId={headProfileId}
+          id={fastenerId}
+          profile={profile}
+        />
+      );
     }
 
     return (
@@ -1732,7 +1783,9 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
       case "standard":
         return (
           <div
-            className={`${className} ${!showStandard ? styles.disabledField : ""}`}
+            className={`${className} ${
+              !showStandard || !isArtworkVerified ? styles.disabledField : ""
+            }`}
             key={fieldId}
           >
             <div className={styles.fieldHeader}>
@@ -1741,6 +1794,7 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
                 <span>Show</span>
                 <input
                   checked={showStandard}
+                  disabled={!isArtworkVerified}
                   onChange={(event) => setShowStandard(event.target.checked)}
                   type="checkbox"
                 />
@@ -1917,10 +1971,22 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
     const topRowHeight = Math.round((height - padding * 2 - gap) * 0.48);
     const topArtworkSource =
       customPrimaryImage ||
-      (isCustomArtwork ? "" : svgToDataUrl(getTopProfileSvgMarkup(fastenerId)));
+      (isCustomArtwork
+        ? ""
+        : svgToDataUrl(
+            fastenerId === "nut" || fastenerId === "washer"
+              ? getHardwareSvgMarkup(fastenerId, "top")
+              : getDriveSvgMarkup(driveId),
+          ));
     const sideArtworkSource =
       customSecondaryImage ||
-      (isCustomArtwork ? "" : svgToDataUrl(getSideProfileSvgMarkup(fastenerId)));
+      (isCustomArtwork
+        ? ""
+        : svgToDataUrl(
+            fastenerId === "nut" || fastenerId === "washer"
+              ? getHardwareSvgMarkup(fastenerId, "side")
+              : getHeadProfileSvgMarkup(headProfileId),
+          ));
     const shouldDrawPrimary = showPrimaryImage && topArtworkSource;
     const shouldDrawSecondary = showSecondaryImage && sideArtworkSource;
     const primaryIconSize = shouldDrawPrimary ? topRowHeight : 0;
@@ -2023,6 +2089,48 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
                       value={itemTypeValue}
                     />
                   </div>
+                  {!isCustomArtwork && isScrewFastener(fastenerId) ? (
+                    <div
+                      className={`${styles.detailsGrid} ${styles.artworkTypeControls}`}
+                    >
+                      <label className={styles.field}>
+                        <span>Drive Type</span>
+                        <select
+                          aria-label="Drive Type"
+                          onChange={(event) => {
+                            setDriveId(event.target.value as DriveId);
+                            setShowStandard(false);
+                          }}
+                          value={driveId}
+                        >
+                          {driveOptions.map((option) => (
+                            <option key={option.id} value={option.id}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className={styles.field}>
+                        <span>Head Profile</span>
+                        <select
+                          aria-label="Head Profile"
+                          onChange={(event) => {
+                            setHeadProfileId(
+                              event.target.value as HeadProfileId,
+                            );
+                            setShowStandard(false);
+                          }}
+                          value={headProfileId}
+                        >
+                          {headProfileOptions.map((option) => (
+                            <option key={option.id} value={option.id}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  ) : null}
                   <div className={`${styles.detailsGrid} ${styles.typeDetailsGrid}`}>
                     {renderDetailField("primaryImage")}
                     {renderDetailField("secondaryImage")}
@@ -2120,7 +2228,12 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
                       ) : isCustomArtwork ? (
                         <CustomArtworkPlaceholder profile="top" />
                       ) : (
-                        <FastenerPicture id={fastenerId} profile="top" />
+                        <FastenerPicture
+                          driveId={driveId}
+                          headProfileId={headProfileId}
+                          id={fastenerId}
+                          profile="top"
+                        />
                       )}
                     </div>
                   ) : null}
@@ -2139,7 +2252,12 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
                     ) : isCustomArtwork ? (
                       <CustomArtworkPlaceholder profile="side" />
                     ) : (
-                      <FastenerPicture id={fastenerId} profile="side" />
+                      <FastenerPicture
+                        driveId={driveId}
+                        headProfileId={headProfileId}
+                        id={fastenerId}
+                        profile="side"
+                      />
                     )}
                   </div>
                 ) : null}
