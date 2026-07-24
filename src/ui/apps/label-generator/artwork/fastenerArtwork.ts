@@ -20,34 +20,74 @@ export const driveOptions = [
   { id: "phillips", label: "Phillips" },
   { id: "pozidriv", label: "Pozidriv" },
   { id: "slot", label: "Slotted" },
-  { id: "torx", label: "Hexalobular / Torx" },
+  { id: "torx", label: "Torx" },
   { id: "square", label: "Square / Robertson" },
   { id: "external-hex", label: "External hex" },
 ] as const satisfies readonly { id: DriveId; label: string }[];
 
 export const headProfileOptions = [
-  { id: "socket", label: "Socket cap" },
-  { id: "button", label: "Button / round" },
-  { id: "countersunk", label: "Countersunk / flat" },
-  { id: "pan", label: "Pan" },
-  { id: "hex", label: "Hex" },
-  { id: "wafer", label: "Wafer / low profile" },
-] as const satisfies readonly { id: HeadProfileId; label: string }[];
+  {
+    id: "socket",
+    label: "Socket cap",
+    defaultDriveId: "hex",
+    driveIds: ["hex", "torx"],
+  },
+  {
+    id: "wafer",
+    label: "Wafer / low profile",
+    defaultDriveId: "phillips",
+    driveIds: ["phillips", "pozidriv", "torx", "hex", "square"],
+  },
+  {
+    id: "button",
+    label: "Button / round",
+    defaultDriveId: "hex",
+    driveIds: ["hex", "torx", "phillips", "slot"],
+  },
+  {
+    id: "countersunk",
+    label: "Countersunk",
+    defaultDriveId: "phillips",
+    driveIds: ["phillips", "pozidriv", "slot", "torx", "hex", "square"],
+  },
+  {
+    id: "pan",
+    label: "Pan",
+    defaultDriveId: "phillips",
+    driveIds: ["phillips", "pozidriv", "slot", "torx", "square"],
+  },
+  {
+    id: "hex",
+    label: "Hex head",
+    defaultDriveId: "external-hex",
+    driveIds: ["external-hex"],
+  },
+] as const satisfies readonly {
+  id: HeadProfileId;
+  label: string;
+  defaultDriveId: DriveId;
+  driveIds: readonly DriveId[];
+}[];
+
+export function getDriveOption(id: DriveId) {
+  return driveOptions.find((option) => option.id === id) ?? driveOptions[0];
+}
+
+export function getHeadProfileOption(id: HeadProfileId) {
+  return (
+    headProfileOptions.find((option) => option.id === id) ??
+    headProfileOptions[0]
+  );
+}
 
 function svgMarkup(viewBox: string, body: string) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" preserveAspectRatio="xMidYMid meet">${body}</svg>`;
 }
 
 function torxCutoutMarkup() {
-  const lobes = Array.from({ length: 6 }, (_, index) => {
-    const angle = (index * Math.PI) / 3;
-    const x = 50 + Math.cos(angle) * 21;
-    const y = 50 + Math.sin(angle) * 21;
-
-    return `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="10.5"/>`;
-  }).join("");
-
-  return `<g fill="white"><circle cx="50" cy="50" r="22"/>${lobes}</g>`;
+  // CC0 Torx geometry adapted from:
+  // https://commons.wikimedia.org/wiki/File:Screw_Head_-_Torx.svg
+  return `<path d="m200 350c-38-1-18-43-51-62s-61 20-80-13 28-37 29-75-48-42-29-75 47 6 80-13 13-63 51-62 18 43 51 62 61-20 80 13-28 37-29 75 48 42 29 75-47-6-80 13-13 63-51 62z" fill="white" transform="translate(10 10) scale(.2)"/>`;
 }
 
 function driveCutoutMarkup(id: Exclude<DriveId, "external-hex">) {
@@ -98,9 +138,12 @@ function machineScrewProfilePath(id: HeadProfileId) {
   }
 }
 
-export function getHeadProfileSvgMarkup(id: HeadProfileId) {
+export function getHeadProfileSvgMarkup(
+  id: HeadProfileId,
+  compact = false,
+) {
   return svgMarkup(
-    "0 0 220 80",
+    compact ? "0 0 100 80" : "0 0 220 80",
     `<path d="${machineScrewProfilePath(id)}" fill="black"/>`,
   );
 }

@@ -36,8 +36,10 @@ import { CollapsibleSection } from "@/ui/apps/openscad/parameterControls";
 import type { GridfinityAppProps } from "../types";
 import {
   driveOptions,
+  getDriveOption,
   getDriveSvgMarkup,
   getHardwareSvgMarkup,
+  getHeadProfileOption,
   getHeadProfileSvgMarkup,
   headProfileOptions,
   type DriveId,
@@ -52,7 +54,7 @@ type FastenerId =
   | "hex-bolt"
   | "nut"
   | "washer";
-type ItemTypeId = FastenerId | "custom";
+type ItemTypeId = "screw" | "nut" | "washer" | "custom";
 type StandardMode = "iso" | "din" | "both";
 type MeasurementSystem = "metric" | "imperial";
 type DetailFieldId =
@@ -192,15 +194,14 @@ const fasteners: Array<{
   },
 ];
 const itemTypeOptions = [
-  ...fasteners.map((fastener) => fastener.id),
+  "screw",
+  "nut",
+  "washer",
   "custom",
 ] as const satisfies readonly ItemTypeId[];
 
 const itemTypeDescriptions: Record<ItemTypeId, string> = {
-  "socket-cap": "Cylindrical hex socket cap screws",
-  "button-head": "Low profile rounded socket screws",
-  "flat-head": "Countersunk socket flat head screws",
-  "hex-bolt": "External hex head threaded bolts",
+  screw: "Machine screws and bolts",
   nut: "Hexagonal internally threaded nuts",
   washer: "Flat round spacing and load washers",
   custom: "User supplied artwork and label text",
@@ -218,8 +219,27 @@ const defaultArtworkByFastener: Record<
   washer: { driveId: "slot", headProfileId: "wafer" },
 };
 
-function isScrewFastener(id: FastenerId) {
-  return id !== "nut" && id !== "washer";
+const fastenerIdByHeadProfile: Record<HeadProfileId, FastenerId> = {
+  socket: "socket-cap",
+  button: "button-head",
+  countersunk: "flat-head",
+  pan: "socket-cap",
+  hex: "hex-bolt",
+  wafer: "socket-cap",
+};
+
+const standardByScrewStyle: Partial<Record<string, string>> = {
+  "socket:hex": "ISO 4762 / DIN 912",
+  "button:hex": "ISO 7380",
+  "countersunk:hex": "ISO 10642 / DIN 7991",
+  "hex:external-hex": "ISO 4017 / DIN 933",
+};
+
+function getScrewStyleStandard(
+  headProfileId: HeadProfileId,
+  driveId: DriveId,
+) {
+  return standardByScrewStyle[`${headProfileId}:${driveId}`] ?? "";
 }
 
 // Edit this map to control pitch/length suggestions for each thread size.
@@ -416,40 +436,7 @@ const detailFields: Record<
 // The renderer below uses these field ids directly, so changing this list is
 // the main place to audit or adjust item-specific detail behavior.
 const detailFieldsByItemType: Record<ItemTypeId, DetailFieldId[]> = {
-  "socket-cap": [
-    "measurementSystem",
-    "threadSize",
-    "pitch",
-    "length",
-    "note",
-    "standard",
-    "qrUrl",
-    "primaryImage",
-    "secondaryImage",
-  ],
-  "button-head": [
-    "measurementSystem",
-    "threadSize",
-    "pitch",
-    "length",
-    "note",
-    "standard",
-    "qrUrl",
-    "primaryImage",
-    "secondaryImage",
-  ],
-  "hex-bolt": [
-    "measurementSystem",
-    "threadSize",
-    "pitch",
-    "length",
-    "note",
-    "standard",
-    "qrUrl",
-    "primaryImage",
-    "secondaryImage",
-  ],
-  "flat-head": [
+  screw: [
     "measurementSystem",
     "threadSize",
     "pitch",
@@ -549,11 +536,23 @@ function readNumber(
 }
 
 function getItemTypeLabel(itemType: string) {
+  if (itemType === "screw") {
+    return "Screw / bolt";
+  }
+
+  if (itemType === "nut") {
+    return "Hex nut";
+  }
+
+  if (itemType === "washer") {
+    return "Flat washer";
+  }
+
   if (itemType === "custom") {
     return "Custom";
   }
 
-  return fasteners.find((fastener) => fastener.id === itemType)?.name ?? itemType;
+  return itemType;
 }
 
 function readStoredLabelSettings(): LabelGeneratorSettings {
@@ -574,34 +573,32 @@ function readStoredLabelSettings(): LabelGeneratorSettings {
       return defaultLabelSettings;
     }
 
+    const storedFastenerId = readString(
+      parsed.fastenerId,
+      defaults.fastenerId,
+      fasteners.map((fastener) => fastener.id),
+    );
+    const storedHeadProfileId = readString(
+      parsed.headProfileId,
+      defaultArtworkByFastener[storedFastenerId].headProfileId,
+      headProfileOptions.map((option) => option.id),
+    );
+    const storedHeadProfile = getHeadProfileOption(storedHeadProfileId);
+    const requestedDriveId = readString(
+      parsed.driveId,
+      defaultArtworkByFastener[storedFastenerId].driveId,
+      driveOptions.map((option) => option.id),
+    );
+    const storedDriveId = (
+      storedHeadProfile.driveIds as readonly DriveId[]
+    ).includes(requestedDriveId)
+      ? requestedDriveId
+      : storedHeadProfile.defaultDriveId;
+
     return {
-      fastenerId: readString(
-        parsed.fastenerId,
-        defaults.fastenerId,
-        fasteners.map((fastener) => fastener.id),
-      ),
-      driveId: readString(
-        parsed.driveId,
-        defaultArtworkByFastener[
-          readString(
-            parsed.fastenerId,
-            defaults.fastenerId,
-            fasteners.map((fastener) => fastener.id),
-          )
-        ].driveId,
-        driveOptions.map((option) => option.id),
-      ),
-      headProfileId: readString(
-        parsed.headProfileId,
-        defaultArtworkByFastener[
-          readString(
-            parsed.fastenerId,
-            defaults.fastenerId,
-            fasteners.map((fastener) => fastener.id),
-          )
-        ].headProfileId,
-        headProfileOptions.map((option) => option.id),
-      ),
+      fastenerId: storedFastenerId,
+      driveId: storedDriveId,
+      headProfileId: storedHeadProfileId,
       itemName:
         typeof parsed.itemName === "string"
           ? parsed.itemName
@@ -724,11 +721,13 @@ function getStandardText(standard: string, mode: StandardMode) {
 }
 
 function FastenerPicture({
+  compactSideProfile = false,
   driveId,
   headProfileId,
   id,
   profile,
 }: {
+  compactSideProfile?: boolean;
   driveId?: DriveId;
   headProfileId?: HeadProfileId;
   id: FastenerId;
@@ -740,7 +739,10 @@ function FastenerPicture({
       ? getHardwareSvgMarkup(id, profile)
       : profile === "top"
         ? getDriveSvgMarkup(driveId ?? artwork.driveId)
-        : getHeadProfileSvgMarkup(headProfileId ?? artwork.headProfileId);
+        : getHeadProfileSvgMarkup(
+            headProfileId ?? artwork.headProfileId,
+            compactSideProfile,
+          );
   const artworkId =
     id === "nut" || id === "washer"
       ? id
@@ -848,12 +850,22 @@ function CustomArtworkPlaceholder({ profile }: { profile: "side" | "top" }) {
 function ItemTypeArtwork({
   customPrimaryImage,
   customSecondaryImage,
+  driveId,
+  headProfileId,
   itemType,
 }: {
   customPrimaryImage: string;
   customSecondaryImage: string;
+  driveId: DriveId;
+  headProfileId: HeadProfileId;
   itemType: ItemTypeId;
 }) {
+  const artworkFastenerId =
+    itemType === "screw"
+      ? fastenerIdByHeadProfile[headProfileId]
+      : itemType === "nut" || itemType === "washer"
+        ? itemType
+        : null;
   const primaryArtwork =
     itemType === "custom" ? (
       customPrimaryImage ? (
@@ -861,9 +873,14 @@ function ItemTypeArtwork({
       ) : (
         <CustomArtworkPlaceholder profile="top" />
       )
-    ) : (
-      <FastenerPicture id={itemType} profile="top" />
-    );
+    ) : artworkFastenerId ? (
+      <FastenerPicture
+        driveId={driveId}
+        headProfileId={headProfileId}
+        id={artworkFastenerId}
+        profile="top"
+      />
+    ) : null;
   const secondaryArtwork =
     itemType === "custom" ? (
       customSecondaryImage ? (
@@ -871,9 +888,14 @@ function ItemTypeArtwork({
       ) : (
         <CustomArtworkPlaceholder profile="side" />
       )
-    ) : (
-      <FastenerPicture id={itemType} profile="side" />
-    );
+    ) : artworkFastenerId ? (
+      <FastenerPicture
+        driveId={driveId}
+        headProfileId={headProfileId}
+        id={artworkFastenerId}
+        profile="side"
+      />
+    ) : null;
 
   return (
     <span className={styles.itemTypeArtwork} aria-hidden="true">
@@ -890,10 +912,14 @@ function ItemTypeArtwork({
 function ItemTypeRow({
   customPrimaryImage,
   customSecondaryImage,
+  driveId,
+  headProfileId,
   itemType,
 }: {
   customPrimaryImage: string;
   customSecondaryImage: string;
+  driveId: DriveId;
+  headProfileId: HeadProfileId;
   itemType: ItemTypeId;
 }) {
   return (
@@ -905,6 +931,8 @@ function ItemTypeRow({
       <ItemTypeArtwork
         customPrimaryImage={customPrimaryImage}
         customSecondaryImage={customSecondaryImage}
+        driveId={driveId}
+        headProfileId={headProfileId}
         itemType={itemType}
       />
     </>
@@ -914,11 +942,15 @@ function ItemTypeRow({
 function ItemTypePicker({
   customPrimaryImage,
   customSecondaryImage,
+  driveId,
+  headProfileId,
   onChange,
   value,
 }: {
   customPrimaryImage: string;
   customSecondaryImage: string;
+  driveId: DriveId;
+  headProfileId: HeadProfileId;
   onChange: (value: ItemTypeId) => void;
   value: ItemTypeId;
 }) {
@@ -999,6 +1031,8 @@ function ItemTypePicker({
         <ItemTypeRow
           customPrimaryImage={customPrimaryImage}
           customSecondaryImage={customSecondaryImage}
+          driveId={driveId}
+          headProfileId={headProfileId}
           itemType={value}
         />
         <ChevronDown aria-hidden="true" size={16} />
@@ -1040,6 +1074,24 @@ function ItemTypePicker({
                 <ItemTypeRow
                   customPrimaryImage={customPrimaryImage}
                   customSecondaryImage={customSecondaryImage}
+                  driveId={
+                    option === "screw"
+                      ? value === "screw"
+                        ? driveId
+                        : defaults.driveId
+                      : option === "nut" || option === "washer"
+                        ? defaultArtworkByFastener[option].driveId
+                        : driveId
+                  }
+                  headProfileId={
+                    option === "screw"
+                      ? value === "screw"
+                        ? headProfileId
+                        : defaults.headProfileId
+                      : option === "nut" || option === "washer"
+                        ? defaultArtworkByFastener[option].headProfileId
+                        : headProfileId
+                  }
                   itemType={option}
                 />
                 {option === value ? <Check aria-hidden="true" size={15} /> : null}
@@ -1049,6 +1101,164 @@ function ItemTypePicker({
               <p className={styles.itemTypeEmpty}>No item types found</p>
             ) : null}
           </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function FastenerStylePicker({
+  driveId,
+  headProfileId,
+  onChange,
+}: {
+  driveId: DriveId;
+  headProfileId: HeadProfileId;
+  onChange: (headProfileId: HeadProfileId, driveId: DriveId) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const headProfile = getHeadProfileOption(headProfileId);
+  const drive = getDriveOption(driveId);
+  const compatibleDrives = headProfile.driveIds.map((id) =>
+    getDriveOption(id),
+  );
+  const isFixedExternalHex =
+    compatibleDrives.length === 1 && compatibleDrives[0].id === "external-hex";
+
+  function selectHead(nextHeadProfileId: HeadProfileId) {
+    const nextHeadProfile = getHeadProfileOption(nextHeadProfileId);
+    const nextDriveId = (
+      nextHeadProfile.driveIds as readonly DriveId[]
+    ).includes(driveId)
+      ? driveId
+      : nextHeadProfile.defaultDriveId;
+
+    onChange(nextHeadProfileId, nextDriveId);
+  }
+
+  return (
+    <div className={styles.fastenerStylePicker}>
+      <span className={styles.fastenerStyleLabel}>Fastener style</span>
+      <button
+        aria-expanded={isOpen}
+        aria-haspopup="dialog"
+        aria-label="Fastener Style"
+        className={styles.fastenerStyleButton}
+        onClick={() => setIsOpen((open) => !open)}
+        type="button"
+      >
+        <span className={styles.fastenerStyleSummary}>
+          <strong>{headProfile.label}</strong>
+          <span>{drive.label}</span>
+        </span>
+        <span className={styles.fastenerStyleArtwork} aria-hidden="true">
+          <span>
+            <FastenerPicture
+              driveId={driveId}
+              headProfileId={headProfileId}
+              id={fastenerIdByHeadProfile[headProfileId]}
+              profile="top"
+            />
+          </span>
+          <span>
+            <FastenerPicture
+              driveId={driveId}
+              headProfileId={headProfileId}
+              id={fastenerIdByHeadProfile[headProfileId]}
+              profile="side"
+            />
+          </span>
+        </span>
+        <ChevronDown aria-hidden="true" size={16} />
+      </button>
+
+      {isOpen ? (
+        <div
+          aria-label="Choose fastener style"
+          className={styles.fastenerStylePopover}
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) {
+              setIsOpen(false);
+            }
+          }}
+          role="dialog"
+        >
+          <div className={styles.fastenerStyleSection}>
+            <strong>Head style</strong>
+            <div
+              aria-label="Head style"
+              className={styles.fastenerHeadGrid}
+              role="group"
+            >
+              {headProfileOptions.map((option) => (
+                <button
+                  aria-label={`Head: ${option.label}`}
+                  aria-pressed={option.id === headProfileId}
+                  key={option.id}
+                  onClick={() => selectHead(option.id)}
+                  type="button"
+                >
+                  <span aria-hidden="true">
+                    <FastenerPicture
+                      compactSideProfile
+                      driveId={option.defaultDriveId}
+                      headProfileId={option.id}
+                      id={fastenerIdByHeadProfile[option.id]}
+                      profile="side"
+                    />
+                  </span>
+                  <small>{option.label}</small>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className={styles.fastenerStyleSection}>
+            <strong>Drive</strong>
+            {isFixedExternalHex ? (
+              <div className={styles.fixedFastenerDrive}>
+                <span aria-hidden="true">
+                  <FastenerPicture
+                    driveId="external-hex"
+                    headProfileId="hex"
+                    id="hex-bolt"
+                    profile="top"
+                  />
+                </span>
+                <span>
+                  <strong>External hex</strong>
+                  <small>Fixed by the hex head style</small>
+                </span>
+              </div>
+            ) : (
+              <div
+                aria-label="Drive"
+                className={styles.fastenerDriveGrid}
+                role="group"
+              >
+                {compatibleDrives.map((option) => (
+                  <button
+                    aria-label={`Drive: ${option.label}`}
+                    aria-pressed={option.id === driveId}
+                    key={option.id}
+                    onClick={() => onChange(headProfileId, option.id)}
+                    type="button"
+                  >
+                    <span aria-hidden="true">
+                      <FastenerPicture
+                        driveId={option.id}
+                        headProfileId={headProfileId}
+                        id={fastenerIdByHeadProfile[headProfileId]}
+                        profile="top"
+                      />
+                    </span>
+                    <small>{option.label}</small>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
         </div>
       ) : null}
     </div>
@@ -1117,13 +1327,11 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
   });
 
   const fastener = getFastener(fastenerId);
-  const defaultArtwork = defaultArtworkByFastener[fastenerId];
-  const isArtworkVerified =
-    driveId === defaultArtwork.driveId &&
-    headProfileId === defaultArtwork.headProfileId;
   const selectedItemTypeId: ItemTypeId = isCustomArtwork
     ? "custom"
-    : fastenerId;
+    : fastenerId === "nut" || fastenerId === "washer"
+      ? fastenerId
+      : "screw";
   const itemTypeValue = selectedItemTypeId;
   const enabledDetailFields = detailFieldsByItemType[selectedItemTypeId];
   const visibleDetailFields = enabledDetailFields.filter(
@@ -1178,12 +1386,17 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
       : [trimmedThreadSize, trimmedLength, displayPitch]
           .filter(Boolean)
           .join(" x ");
-  const standardParts = getStandardParts(
-    isArtworkVerified ? fastener.standard : "",
-  );
+  const selectedStandard =
+    selectedItemTypeId === "screw"
+      ? getScrewStyleStandard(headProfileId, driveId)
+      : selectedItemTypeId === "nut" || selectedItemTypeId === "washer"
+        ? fastener.standard
+        : "";
+  const hasKnownStandard = selectedStandard.length > 0;
+  const standardParts = getStandardParts(selectedStandard);
   const activeStandardMode =
     standardMode === "din" && !standardParts.din ? "both" : standardMode;
-  const standardText = getStandardText(fastener.standard, activeStandardMode);
+  const standardText = getStandardText(selectedStandard, activeStandardMode);
   const primaryText = isCustomArtwork
     ? trimmedItemName
     : hasDetailField("pitch") && hasDetailField("length")
@@ -1487,20 +1700,39 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
     setLength(nextDetails.length);
   }
 
-  function selectItemType(itemType: string) {
+  function selectItemType(itemType: ItemTypeId) {
     if (itemType === "custom") {
       setIsCustomArtwork(true);
       return;
     }
 
-    if (itemTypeOptions.includes(itemType as ItemTypeId)) {
-      const nextFastenerId = itemType as FastenerId;
-      const nextArtwork = defaultArtworkByFastener[nextFastenerId];
-      setFastenerId(nextFastenerId);
+    if (itemType === "screw") {
+      if (fastenerId === "nut" || fastenerId === "washer") {
+        setFastenerId(defaults.fastenerId);
+        setDriveId(defaults.driveId);
+        setHeadProfileId(defaults.headProfileId);
+      }
+      setIsCustomArtwork(false);
+      return;
+    }
+
+    if (itemType === "nut" || itemType === "washer") {
+      const nextArtwork = defaultArtworkByFastener[itemType];
+      setFastenerId(itemType);
       setDriveId(nextArtwork.driveId);
       setHeadProfileId(nextArtwork.headProfileId);
       setIsCustomArtwork(false);
     }
+  }
+
+  function selectFastenerStyle(
+    nextHeadProfileId: HeadProfileId,
+    nextDriveId: DriveId,
+  ) {
+    setFastenerId(fastenerIdByHeadProfile[nextHeadProfileId]);
+    setHeadProfileId(nextHeadProfileId);
+    setDriveId(nextDriveId);
+    setShowStandard(false);
   }
 
   function updateCustomWidth(value: string) {
@@ -1784,7 +2016,7 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
         return (
           <div
             className={`${className} ${
-              !showStandard || !isArtworkVerified ? styles.disabledField : ""
+              !showStandard || !hasKnownStandard ? styles.disabledField : ""
             }`}
             key={fieldId}
           >
@@ -1793,8 +2025,9 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
               <span className={styles.inlineCheckbox}>
                 <span>Show</span>
                 <input
+                  aria-label="Show ISO / DIN standard"
                   checked={showStandard}
-                  disabled={!isArtworkVerified}
+                  disabled={!hasKnownStandard}
                   onChange={(event) => setShowStandard(event.target.checked)}
                   type="checkbox"
                 />
@@ -2085,51 +2318,18 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
                     <ItemTypePicker
                       customPrimaryImage={customPrimaryImage}
                       customSecondaryImage={customSecondaryImage}
+                      driveId={driveId}
+                      headProfileId={headProfileId}
                       onChange={selectItemType}
                       value={itemTypeValue}
                     />
                   </div>
-                  {!isCustomArtwork && isScrewFastener(fastenerId) ? (
-                    <div
-                      className={`${styles.detailsGrid} ${styles.artworkTypeControls}`}
-                    >
-                      <label className={styles.field}>
-                        <span>Drive Type</span>
-                        <select
-                          aria-label="Drive Type"
-                          onChange={(event) => {
-                            setDriveId(event.target.value as DriveId);
-                            setShowStandard(false);
-                          }}
-                          value={driveId}
-                        >
-                          {driveOptions.map((option) => (
-                            <option key={option.id} value={option.id}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className={styles.field}>
-                        <span>Head Profile</span>
-                        <select
-                          aria-label="Head Profile"
-                          onChange={(event) => {
-                            setHeadProfileId(
-                              event.target.value as HeadProfileId,
-                            );
-                            setShowStandard(false);
-                          }}
-                          value={headProfileId}
-                        >
-                          {headProfileOptions.map((option) => (
-                            <option key={option.id} value={option.id}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
+                  {selectedItemTypeId === "screw" ? (
+                    <FastenerStylePicker
+                      driveId={driveId}
+                      headProfileId={headProfileId}
+                      onChange={selectFastenerStyle}
+                    />
                   ) : null}
                   <div className={`${styles.detailsGrid} ${styles.typeDetailsGrid}`}>
                     {renderDetailField("primaryImage")}

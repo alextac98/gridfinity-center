@@ -164,11 +164,6 @@
   gap: 8px;
 }
 
-.artworkTypeControls {
-  grid-template-columns: 1fr;
-  margin-top: 12px;
-}
-
 .fieldLabel,
 .field span {
   color: var(--text);
@@ -250,6 +245,15 @@
   display: block;
   width: 100%;
   height: 100%;
+}
+
+.itemTypeArtwork [data-artwork-id] svg,
+.fastenerStyleArtwork [data-artwork-id] svg,
+.fastenerHeadGrid [data-artwork-id] svg,
+.fastenerDriveGrid [data-artwork-id] svg,
+.fixedFastenerDrive [data-artwork-id] svg,
+.artworkPreview [data-artwork-id] svg {
+  filter: var(--monochrome-artwork-filter, none);
 }
 
 .itemTypePicker {
@@ -428,6 +432,241 @@
   color: var(--muted);
   font-size: 13px;
   font-weight: 680;
+}
+
+.fastenerStylePicker {
+  position: relative;
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  margin-top: 12px;
+}
+
+.fastenerStyleLabel {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 720;
+}
+
+.fastenerStyleButton {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 68px auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 60px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 8px 9px 8px 11px;
+  background: var(--field);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.fastenerStyleButton > svg {
+  color: var(--muted);
+}
+
+.fastenerStyleButton[aria-expanded="true"] > svg {
+  transform: rotate(180deg);
+}
+
+.fastenerStyleSummary {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.fastenerStyleSummary strong,
+.fastenerStyleSummary span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fastenerStyleSummary strong {
+  font-size: 14px;
+  font-weight: 780;
+}
+
+.fastenerStyleSummary span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 680;
+}
+
+.fastenerStyleArtwork {
+  display: grid;
+  grid-template-columns: 24px 38px;
+  align-items: center;
+  gap: 5px;
+}
+
+.fastenerStyleArtwork > span {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  height: 32px;
+  overflow: hidden;
+}
+
+.fastenerStyleArtwork .topProfilePicture,
+.fastenerStyleArtwork .sideProfilePicture {
+  width: 100%;
+  height: 100%;
+}
+
+.fastenerStyleArtwork .topProfilePicture {
+  height: auto;
+}
+
+.fastenerStyleArtwork .sideProfilePicture {
+  position: absolute;
+  inset: 0;
+  aspect-ratio: auto;
+}
+
+.fastenerStylePopover {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--surface);
+}
+
+.fastenerStyleSection {
+  display: grid;
+  gap: 8px;
+}
+
+.fastenerStyleSection > strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.fastenerHeadGrid,
+.fastenerDriveGrid {
+  display: grid;
+  gap: 7px;
+}
+
+.fastenerHeadGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.fastenerDriveGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.fastenerHeadGrid button,
+.fastenerDriveGrid button {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 7px;
+  background: var(--field);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+}
+
+.fastenerHeadGrid button {
+  gap: 4px;
+  min-height: 68px;
+  text-align: center;
+}
+
+.fastenerDriveGrid button {
+  gap: 5px;
+  min-height: 72px;
+  text-align: center;
+}
+
+.fastenerHeadGrid button[aria-pressed="true"],
+.fastenerDriveGrid button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--brand-accent) 62%, transparent);
+  background: color-mix(in srgb, var(--brand-accent) 13%, var(--field));
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--brand-accent) 24%, transparent);
+}
+
+.fastenerHeadGrid button > span {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 30px;
+}
+
+.fastenerDriveGrid button > span {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+}
+
+.fastenerHeadGrid .sideProfilePicture,
+.fastenerDriveGrid .topProfilePicture {
+  width: 100%;
+  height: 100%;
+}
+
+.fastenerHeadGrid small,
+.fastenerDriveGrid small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 720;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+}
+
+.fixedFastenerDrive {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 9px;
+  background: var(--field);
+}
+
+.fixedFastenerDrive > span:first-child {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+}
+
+.fixedFastenerDrive .topProfilePicture {
+  width: 100%;
+  height: 100%;
+}
+
+.fixedFastenerDrive > span:last-child {
+  display: grid;
+  gap: 2px;
+}
+
+.fixedFastenerDrive strong {
+  font-size: 13px;
+}
+
+.fixedFastenerDrive small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
 }
 
 .customArtworkImage {

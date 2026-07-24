@@ -48,12 +48,11 @@ test("restores label settings after a reload", async ({ page }) => {
   await expect(page.getByLabel("Additional Text")).toHaveValue("Reload me");
 });
 
-test("selects and restores independent drive and head artwork", async ({
+test("selects and restores a compatible fastener style", async ({
   page,
 }) => {
   const preview = page.getByTestId("label-preview-transform");
-  const drive = page.getByLabel("Drive Type");
-  const head = page.getByLabel("Head Profile");
+  const style = page.getByRole("button", { name: "Fastener Style" });
 
   await expect
     .poll(() =>
@@ -62,11 +61,18 @@ test("selects and restores independent drive and head artwork", async ({
       ),
     )
     .not.toBeNull();
-  await expect(drive).toHaveValue("hex");
-  await expect(head).toHaveValue("socket");
+  await style.click();
+  await expect(
+    page.getByRole("button", { name: "Head: Socket cap" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByRole("button", { name: "Drive: Hex socket" }),
+  ).toHaveAttribute("aria-pressed", "true");
 
-  await drive.selectOption("phillips");
-  await head.selectOption("countersunk");
+  await page
+    .getByRole("button", { name: "Head: Countersunk" })
+    .click();
+  await page.getByRole("button", { name: "Drive: Phillips" }).click();
 
   await expect(
     preview.locator('[data-artwork-profile="top"]'),
@@ -97,15 +103,53 @@ test("selects and restores independent drive and head artwork", async ({
     });
 
   await page.reload();
-  await expect(page.getByLabel("Drive Type")).toHaveValue("phillips");
-  await expect(page.getByLabel("Head Profile")).toHaveValue("countersunk");
+  await expect(
+    page.getByRole("button", { name: "Fastener Style" }),
+  ).toContainText("Countersunk");
+  await expect(
+    page.getByRole("button", { name: "Fastener Style" }),
+  ).toContainText("Phillips");
+});
+
+test("repairs an incompatible saved fastener style", async ({ page }) => {
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.localStorage.getItem("gridfinity-label-generator-settings"),
+      ),
+    )
+    .not.toBeNull();
+
+  await page.evaluate(() => {
+    const storageKey = "gridfinity-label-generator-settings";
+    const storedSettings = window.localStorage.getItem(storageKey);
+    const parsed = storedSettings ? JSON.parse(storedSettings) : {};
+
+    window.localStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        ...parsed,
+        driveId: "external-hex",
+        fastenerId: "flat-head",
+        headProfileId: "countersunk",
+      }),
+    );
+  });
+  await page.reload();
+
+  const style = page.getByRole("button", { name: "Fastener Style" });
+  await expect(style).toContainText("Countersunk");
+  await expect(style).toContainText("Phillips");
 });
 
 test("keeps fastener artwork inside its preview slots", async ({ page }) => {
   const preview = page.getByTestId("label-preview-transform");
 
   await page.getByRole("button", { name: /70 x 25/ }).click();
-  await page.getByLabel("Head Profile").selectOption("button");
+  await page.getByRole("button", { name: "Fastener Style" }).click();
+  await page
+    .getByRole("button", { name: "Head: Button / round" })
+    .click();
 
   for (const profile of ["top", "side"]) {
     const artworkFits = await preview
@@ -145,6 +189,154 @@ test("keeps fastener artwork inside its preview slots", async ({ page }) => {
 
     expect(graphicFits).toBe(true);
   }
+});
+
+test("keeps fastener artwork legible in both color themes", async ({ page }) => {
+  const itemType = page.getByRole("button", { name: "Item Type" });
+  const style = page.getByRole("button", { name: "Fastener Style" });
+  const previewArtwork = page
+    .getByTestId("label-preview-transform")
+    .locator('[data-artwork-profile="top"] svg');
+  const itemTypeArtwork = itemType.locator("[data-artwork-id] svg").first();
+  const styleArtwork = style.locator("[data-artwork-id] svg").first();
+
+  const switchToLight = page.getByRole("button", {
+    name: "Switch to light mode",
+  });
+  if (await switchToLight.isVisible()) {
+    await switchToLight.click();
+  }
+
+  await expect(itemTypeArtwork).toHaveCSS("filter", "none");
+  await expect(styleArtwork).toHaveCSS("filter", "none");
+  await expect(previewArtwork).toHaveCSS("filter", "none");
+
+  await page
+    .getByRole("button", { name: "Switch to dark mode" })
+    .click();
+
+  await expect(itemTypeArtwork).toHaveCSS("filter", "invert(1)");
+  await expect(styleArtwork).toHaveCSS("filter", "invert(1)");
+  await expect(previewArtwork).toHaveCSS("filter", "none");
+  await expect
+    .poll(() =>
+      style
+        .locator('[data-artwork-profile="top"]')
+        .evaluate((artwork) => {
+          const artworkRect = artwork.getBoundingClientRect();
+          const slotRect = artwork.parentElement?.getBoundingClientRect();
+
+          return Boolean(
+            slotRect &&
+              artworkRect.left >= slotRect.left &&
+              artworkRect.right <= slotRect.right,
+          );
+        }),
+    )
+    .toBe(true);
+
+  await style.click();
+  await expect(
+    page
+      .getByRole("button", { name: "Head: Socket cap" })
+      .locator("[data-artwork-id] svg"),
+  ).toHaveCSS("filter", "invert(1)");
+  await expect(
+    page
+      .getByRole("button", { name: "Drive: Hex socket" })
+      .locator("[data-artwork-id] svg"),
+  ).toHaveCSS("filter", "invert(1)");
+
+  const torxDrive = page.getByRole("button", { name: "Drive: Torx" });
+  await expect(torxDrive).toBeVisible();
+  await expect(page.getByText(/hexalobular/i)).toHaveCount(0);
+  await torxDrive.click();
+  await expect(
+    page
+      .getByTestId("label-preview-transform")
+      .locator('[data-artwork-profile="top"]'),
+  ).toHaveAttribute("data-artwork-id", "torx");
+
+  await page.getByRole("button", { name: "Head: Hex head" }).click();
+  await expect(
+    page
+      .getByText("Fixed by the hex head style")
+      .locator("..")
+      .locator("..")
+      .locator("[data-artwork-id] svg"),
+  ).toHaveCSS("filter", "invert(1)");
+});
+
+test("only offers drives compatible with the selected head", async ({
+  page,
+}) => {
+  const preview = page.getByTestId("label-preview-transform");
+  const standardToggle = page.getByLabel("Show ISO / DIN standard");
+
+  await expect(standardToggle).toBeEnabled();
+  await page.getByRole("button", { name: "Fastener Style" }).click();
+
+  await expect(
+    page
+      .getByRole("group", { name: "Head style" })
+      .getByRole("button"),
+  ).toHaveText([
+    "Socket cap",
+    "Wafer / low profile",
+    "Button / round",
+    "Countersunk",
+    "Pan",
+    "Hex head",
+  ]);
+
+  await page
+    .getByRole("button", { name: "Head: Button / round" })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Drive: Slotted" }),
+  ).toBeVisible();
+
+  await page
+    .getByRole("button", { name: "Head: Wafer / low profile" })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Drive: Hex socket" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Head: Hex head" }).click();
+
+  await expect(page.getByText("Fixed by the hex head style")).toBeVisible();
+  await expect(standardToggle).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "Drive: Phillips" }),
+  ).toHaveCount(0);
+  await expect(
+    preview.locator('[data-artwork-profile="top"]'),
+  ).toHaveAttribute("data-artwork-id", "external-hex");
+
+  await page
+    .getByRole("button", { name: "Head: Countersunk" })
+    .click();
+
+  await expect(
+    page.getByRole("button", { name: "Drive: Phillips" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(standardToggle).toBeDisabled();
+  await expect(page.getByText("Fixed by the hex head style")).toHaveCount(0);
+  await expect(
+    preview.locator('[data-artwork-profile="top"]'),
+  ).toHaveAttribute("data-artwork-id", "phillips");
+
+  await page.getByRole("button", { name: "Fastener Style" }).click();
+  await page.getByRole("button", { name: "Item Type" }).click();
+  await page.getByRole("option", { name: /Hex nut/ }).click();
+
+  await expect(
+    page.getByRole("button", { name: "Fastener Style" }),
+  ).toHaveCount(0);
+  await expect(
+    preview.locator('[data-artwork-profile="top"]'),
+  ).toHaveAttribute("data-artwork-id", "nut");
 });
 
 test("allows partial bin height units", async ({ page }) => {
