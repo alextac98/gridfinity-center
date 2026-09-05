@@ -498,9 +498,11 @@ test("allows panning and zooming the label preview", async ({ page }) => {
     .toBe("1.56");
   await expect
     .poll(() =>
-      preview.evaluate((element) => window.getComputedStyle(element).transform),
+      preview.evaluate((element) =>
+        parseFloat((element.firstElementChild as HTMLElement).style.width),
+      ),
     )
-    .toContain("matrix(1.56, 0, 0, 1.56, 0, 0)");
+    .toBeCloseTo(600.6, 1);
 });
 
 test("renders the grid generator and persists grid settings", async ({ page }) => {

@@ -1138,56 +1138,53 @@
 }
 
 .labelShadow {
-  position: relative;
+  position: absolute;
+  left: 50%;
+  top: 50%;
   z-index: 1;
-  width: fit-content;
-  max-width: 100%;
+  width: max-content;
   padding: 0;
   background: transparent;
   box-shadow: 0 22px 58px rgba(23, 33, 31, 0.16);
-  transform: translate(var(--preview-pan-x, 0), var(--preview-pan-y, 0))
-    scale(var(--preview-scale, 1));
-  transform-origin: center;
-  will-change: transform;
+  transform: translate(
+    calc(-50% + var(--preview-pan-x, 0px)),
+    calc(-50% + var(--preview-pan-y, 0px))
+  );
 }
 
 .label {
   container-type: size;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: 1fr;
-  align-items: stretch;
-  gap: clamp(5px, 6cqh, 12px);
+  position: relative;
   width: 100%;
-  max-width: 100%;
   min-height: 0;
-  border: 1px dashed rgba(0, 0, 0, 0.18);
-  padding: clamp(5px, 7cqh, 10px);
   overflow: hidden;
   background: #ffffff;
   color: #000000;
 }
 
-.labelContent {
-  display: grid;
-  grid-template-rows: minmax(0, 0.56fr) minmax(0, 0.44fr);
-  min-width: 0;
-  min-height: 0;
-  height: 100%;
-  gap: clamp(3px, 4cqh, 8px);
-  overflow: hidden;
+.label::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  border: var(--label-border-width) solid #000000;
+  border-radius: inherit;
+  pointer-events: none;
 }
 
-.labelTopRow {
-  display: flex;
+.labelContent {
+  position: absolute;
+  display: grid;
   min-width: 0;
   min-height: 0;
-  gap: clamp(5px, 5cqh, 10px);
   overflow: hidden;
 }
 
 .topProfileSlot {
+  position: absolute;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   flex: 0 0 auto;
   place-items: center;
   width: auto;
@@ -1199,6 +1196,8 @@
 }
 
 .label .topProfilePicture {
+  min-width: 0;
+  min-height: 0;
   width: 100%;
   height: 100%;
   aspect-ratio: auto;
@@ -1227,7 +1226,12 @@
   object-fit: contain;
 }
 
+.secondaryProfileSlot .customArtworkImage {
+  object-position: center;
+}
+
 .qrImage {
+  position: absolute;
   display: block;
   align-self: stretch;
   width: auto;
@@ -1240,33 +1244,29 @@
 }
 
 .labelCopy {
-  display: grid;
-  flex: 1 1 auto;
-  grid-template-rows: minmax(0, 0.68fr) minmax(0, 0.32fr);
-  align-items: stretch;
+  position: relative;
   min-width: 0;
   min-height: 0;
   height: 100%;
-  gap: 0;
   overflow: hidden;
+}
+
+.labelCopy strong,
+.labelCopy span {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  font-family: Arial, Helvetica, sans-serif;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .labelCopy strong {
-  align-self: end;
-  overflow: hidden;
-  font-size: clamp(14px, 28cqh, 40px);
-  line-height: 0.9;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-weight: 800;
 }
 
 .labelCopy span {
-  align-self: start;
-  overflow: hidden;
-  font-size: clamp(7px, 9cqh, 14px);
-  line-height: 1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-weight: 500;
 }
 
 .sizeGrid {
@@ -1368,10 +1368,6 @@
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .labelCopy strong,
-  .labelCopy span {
-    white-space: normal;
-  }
 
   .fastenerGrid,
   .twoColumn,

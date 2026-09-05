@@ -45,6 +45,12 @@ import {
   type DriveId,
   type HeadProfileId,
 } from "./artwork/fastenerArtwork";
+import { getLabelLayout } from "./labelLayout";
+import {
+  getLabelTextLayout,
+  getLabelTextStyle,
+  labelFontFamily,
+} from "./labelText";
 import styles from "./label-generator.module.css";
 
 type FastenerId =
@@ -742,6 +748,7 @@ function FastenerPicture({
         : getHeadProfileSvgMarkup(
             headProfileId ?? artwork.headProfileId,
             compactSideProfile,
+            driveId ?? artwork.driveId,
           );
   const artworkId =
     id === "nut" || id === "washer"
@@ -757,30 +764,9 @@ function FastenerPicture({
       }
       data-artwork-id={artworkId}
       data-artwork-profile={profile}
-      dangerouslySetInnerHTML={{
-        __html: markup,
-      }}
+      dangerouslySetInnerHTML={{ __html: markup }}
     />
   );
-}
-
-function fitCanvasText(
-  context: CanvasRenderingContext2D,
-  text: string,
-  maxWidth: number,
-  font: (size: number) => string,
-  startSize: number,
-  minSize: number,
-) {
-  let size = startSize;
-  context.font = font(size);
-
-  while (context.measureText(text).width > maxWidth && size > minSize) {
-    size -= 2;
-    context.font = font(size);
-  }
-
-  return size;
 }
 
 function loadImage(src: string) {
@@ -1429,6 +1415,24 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
       }),
     [previewHeightPx, previewSurfaceSize, previewView, previewWidthPx],
   );
+  // Resize the DOM/SVG drawing itself so zoom does not magnify a cached bitmap.
+  const renderedPreviewWidth = previewWidthPx * boundedPreviewView.scale;
+  const renderedPreviewHeight = previewHeightPx * boundedPreviewView.scale;
+  const labelLayout = getLabelLayout(
+    renderedPreviewWidth, renderedPreviewHeight, showPrimaryImage, showSecondaryImage, canShowQr,
+  );
+  const labelTextRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const context = document.createElement("canvas").getContext("2d");
+    if (!context || !labelTextRef.current) return;
+    const textLayout = getLabelTextLayout(
+      context, primaryText, secondaryText, labelLayout.contentWidth, labelLayout.copyHeight,
+    );
+    const primary = labelTextRef.current.querySelector("strong");
+    const secondary = labelTextRef.current.querySelector("span");
+    if (primary) Object.assign(primary.style, getLabelTextStyle(textLayout.primary));
+    if (secondary) Object.assign(secondary.style, getLabelTextStyle(textLayout.secondary));
+  }, [primaryText, secondaryText, labelLayout.contentWidth, labelLayout.copyHeight]);
   const previewTransformStyle = {
     "--preview-grid-size": `${
       previewGridSizeMm * previewPxPerMm * boundedPreviewView.scale
@@ -1536,18 +1540,18 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
       return;
     }
 
-    QRCode.toDataURL(trimmedQrUrl, {
+    QRCode.toString(trimmedQrUrl, {
+      type: "svg",
       errorCorrectionLevel: "M",
       margin: 1,
-      width: 320,
       color: {
         dark: "#000000",
         light: "#ffffff",
       },
     })
-      .then((url) => {
+      .then((svg) => {
         if (isCurrent) {
-          setQrCode({ source: trimmedQrUrl, dataUrl: url });
+          setQrCode({ source: trimmedQrUrl, dataUrl: svgToDataUrl(svg) });
         }
       })
       .catch(() => {
@@ -1966,6 +1970,7 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
                 <span>Show</span>
                 <input
                   checked={showPrimaryImage}
+                  aria-label="Show primary image"
                   onChange={(event) =>
                     setShowPrimaryImage(event.target.checked)
                   }
@@ -1996,6 +2001,7 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
                 <span>Show</span>
                 <input
                   checked={showSecondaryImage}
+                  aria-label="Show secondary image"
                   onChange={(event) =>
                     setShowSecondaryImage(event.target.checked)
                   }
@@ -2159,6 +2165,7 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
                 <span>Show</span>
                 <input
                   checked={showQr}
+                  aria-label="Show QR code"
                   onChange={(event) => setShowQr(event.target.checked)}
                   type="checkbox"
                 />
@@ -2191,17 +2198,18 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
     canvas.height = height;
     context.fillStyle = "#ffffff";
     context.fillRect(0, 0, width, height);
-    context.strokeStyle = "#d8d8d8";
-    context.lineWidth = Math.max(2, Math.round(height * 0.012));
-    context.strokeRect(1, 1, width - 2, height - 2);
-
-    const padding = Math.round(height * 0.09);
-    const gap = Math.round(height * 0.07);
-    const qrSize = Math.round(height - padding * 2);
-    const qrX = width - padding - qrSize;
-    const contentX = padding;
-    const contentWidth = Math.max(height, qrX - gap - contentX);
-    const topRowHeight = Math.round((height - padding * 2 - gap) * 0.48);
+    const layout = getLabelLayout(
+      width, height, showPrimaryImage, showSecondaryImage, canShowQr,
+    );
+    context.strokeStyle = "#000000";
+    context.lineWidth = layout.borderWidth;
+    const borderInset = layout.borderWidth / 2;
+    context.beginPath();
+    context.roundRect(
+      borderInset, borderInset, width - layout.borderWidth, height - layout.borderWidth,
+      layout.borderRadius - borderInset,
+    );
+    context.stroke();
     const topArtworkSource =
       customPrimaryImage ||
       (isCustomArtwork
@@ -2218,69 +2226,53 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
         : svgToDataUrl(
             fastenerId === "nut" || fastenerId === "washer"
               ? getHardwareSvgMarkup(fastenerId, "side")
-              : getHeadProfileSvgMarkup(headProfileId),
+              : getHeadProfileSvgMarkup(headProfileId, false, driveId),
           ));
     const shouldDrawPrimary = showPrimaryImage && topArtworkSource;
     const shouldDrawSecondary = showSecondaryImage && sideArtworkSource;
-    const primaryIconSize = shouldDrawPrimary ? topRowHeight : 0;
-    const textX = contentX + (shouldDrawPrimary ? primaryIconSize + gap : 0);
-    const textWidth = Math.max(height, contentWidth - (textX - contentX));
-    const secondaryY = padding + topRowHeight + gap;
-    const secondaryHeight = height - padding - secondaryY;
-
     if (shouldDrawPrimary) {
       const image = await loadImage(topArtworkSource);
-      context.drawImage(image, contentX, padding, primaryIconSize, primaryIconSize);
+      drawImageContained(
+        context, image, layout.padding, layout.top, layout.edgeSize, layout.edgeSize,
+      );
     }
 
-    const primarySize = fitCanvasText(
-      context,
-      primaryText,
-      textWidth,
-      (size) => `800 ${size}px Arial, Helvetica, sans-serif`,
-      Math.round(topRowHeight * 0.48),
-      Math.round(topRowHeight * 0.22),
+    const textLayout = getLabelTextLayout(
+      context, primaryText, secondaryText, layout.contentWidth, layout.copyHeight,
     );
-
     context.fillStyle = "#000000";
     context.textBaseline = "alphabetic";
-    context.font = `800 ${primarySize}px Arial, Helvetica, sans-serif`;
-    context.fillText(
-      primaryText,
-      textX,
-      padding + Math.round(topRowHeight * 0.54),
-    );
-
-    const secondarySize = fitCanvasText(
-      context,
-      secondaryText,
-      textWidth,
-      (size) => `500 ${size}px Arial, Helvetica, sans-serif`,
-      Math.round(topRowHeight * 0.22),
-      Math.round(topRowHeight * 0.12),
-    );
-    context.font = `500 ${secondarySize}px Arial, Helvetica, sans-serif`;
-    context.fillText(
-      secondaryText,
-      textX,
-      padding + Math.round(topRowHeight * 0.84),
-    );
+    context.textAlign = "center";
+    for (const [text, weight, line] of [
+      [primaryText, 800, textLayout.primary],
+      [secondaryText, 500, textLayout.secondary],
+    ] as const) {
+      if (!text) continue;
+      context.font = `${weight} ${line.fontSize}px ${labelFontFamily}`;
+      context.fillText(
+        text,
+        layout.contentLeft + layout.contentWidth / 2,
+        layout.contentTop + line.baseline,
+      );
+    }
 
     if (shouldDrawSecondary) {
       const image = await loadImage(sideArtworkSource);
       drawImageContained(
         context,
         image,
-        contentX,
-        secondaryY,
-        contentWidth,
-        secondaryHeight,
+        layout.contentLeft,
+        layout.sideTop,
+        layout.contentWidth,
+        layout.sideHeight,
       );
     }
 
     if (canShowQr) {
       const image = await loadImage(qrCode.dataUrl);
-      context.drawImage(image, qrX, padding, qrSize, qrSize);
+      context.drawImage(
+        image, layout.qrLeft, layout.top, layout.edgeSize, layout.edgeSize,
+      );
     }
 
     captureEvent("label_exported", {
@@ -2412,35 +2404,53 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
               className={styles.label}
               style={{
                 aspectRatio: previewRatio,
-                width: `${previewWidthPx}px`,
-                height: `${previewHeightPx}px`,
-              }}
+                width: `${renderedPreviewWidth}px`,
+                height: `${renderedPreviewHeight}px`,
+                borderRadius: labelLayout.borderRadius,
+                "--label-border-width": `${labelLayout.borderWidth}px`,
+              } as CSSProperties}
             >
-              <div className={styles.labelContent}>
-                <div className={styles.labelTopRow}>
-                  {showPrimaryImage ? (
-                    <div className={styles.topProfileSlot}>
-                      {customPrimaryImage ? (
-                        <CustomArtworkImage
-                          profile="top"
-                          src={customPrimaryImage}
-                        />
-                      ) : isCustomArtwork ? (
-                        <CustomArtworkPlaceholder profile="top" />
-                      ) : (
-                        <FastenerPicture
-                          driveId={driveId}
-                          headProfileId={headProfileId}
-                          id={fastenerId}
-                          profile="top"
-                        />
-                      )}
-                    </div>
+              {showPrimaryImage ? (
+                <div
+                  className={styles.topProfileSlot}
+                  style={{
+                    left: labelLayout.padding, top: labelLayout.top,
+                    width: labelLayout.edgeSize, height: labelLayout.edgeSize,
+                  }}
+                >
+                  {customPrimaryImage ? (
+                    <CustomArtworkImage profile="top" src={customPrimaryImage} />
+                  ) : isCustomArtwork ? (
+                    <CustomArtworkPlaceholder profile="top" />
+                  ) : (
+                    <FastenerPicture
+                      driveId={driveId}
+                      headProfileId={headProfileId}
+                      id={fastenerId}
+                      profile="top"
+                    />
+                  )}
+                </div>
+              ) : null}
+              <div
+                className={styles.labelContent}
+                style={{
+                  left: labelLayout.contentLeft, top: labelLayout.contentTop,
+                  width: labelLayout.contentWidth, height: labelLayout.contentHeight,
+                  gridTemplateRows: showSecondaryImage
+                    ? `${labelLayout.copyHeight}px minmax(0, 1fr)` : "1fr",
+                  gap: labelLayout.rowGap,
+                }}
+              >
+                <div className={styles.labelCopy} data-testid="label-text" ref={labelTextRef}>
+                  <strong>
+                    {primaryText}
+                  </strong>
+                  {secondaryText ? (
+                    <span>
+                      {secondaryText}
+                    </span>
                   ) : null}
-                  <div className={styles.labelCopy}>
-                    <strong>{primaryText}</strong>
-                    <span>{secondaryText}</span>
-                  </div>
                 </div>
                 {showSecondaryImage ? (
                   <div className={styles.secondaryProfileSlot}>
@@ -2464,7 +2474,16 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
               </div>
               {canShowQr ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img className={styles.qrImage} src={qrCode.dataUrl} alt="" />
+                <img
+                  className={styles.qrImage}
+                  data-testid="label-qr"
+                  src={qrCode.dataUrl}
+                  alt=""
+                  style={{
+                    left: labelLayout.qrLeft, top: labelLayout.top,
+                    width: labelLayout.edgeSize, height: labelLayout.edgeSize,
+                  }}
+                />
               ) : null}
             </div>
           </div>
