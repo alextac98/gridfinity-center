@@ -1,5 +1,7 @@
 "use client";
 
+import { GeneratorPanel } from "@/ui/components/ui/GeneratorSidebar";
+
 import { PanelLeft, SlidersHorizontal } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { captureEvent } from "@/ui/analytics/posthog";
@@ -20,7 +22,6 @@ import {
 } from "@/shared/gridfinityBaseplate";
 import { ModelOutputPanel } from "../openscad/ModelOutputPanel";
 import {
-  GeneratorPanel,
   LoadingPanel,
   OpenScadGeneratorShell,
   PreviewLoading,

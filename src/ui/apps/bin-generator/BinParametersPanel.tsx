@@ -1,5 +1,12 @@
 "use client";
 
+import {
+  CollapsibleSection,
+  GeneratorPanel,
+  GeneratorPanelActions,
+  GeneratorPanelBody,
+} from "@/ui/components/ui/GeneratorSidebar";
+
 import { Play, RotateCcw, Search, SlidersHorizontal, X } from "lucide-react";
 import type { Dispatch, SetStateAction } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -36,7 +43,6 @@ import binStyles from "./binGenerator.module.css";
 import {
   AlignmentGridPicker,
   BooleanField,
-  CollapsibleSection,
   ExtraOptionField,
   NumberInputField,
   SelectField,
@@ -1099,10 +1105,11 @@ export function BinParametersPanel({
   };
 
   return (
-    <section className={styles.panel} aria-label="Bin Parameters">
-      <div className={styles.panelHeader}>
-        <SlidersHorizontal aria-hidden="true" size={18} />
-        <h2>Bin Parameters</h2>
+    <GeneratorPanel
+      ariaLabel="Bin Parameters"
+      title="Bin Parameters"
+      icon={<SlidersHorizontal aria-hidden="true" size={18} />}
+      headerActions={
         <div className={styles.parameterSearch}>
           <button
             aria-expanded={isSearchOpen}
@@ -1157,299 +1164,297 @@ export function BinParametersPanel({
             </div>
           ) : null}
         </div>
-      </div>
-
-      <div className={styles.panelScroll}>
-        <div className={styles.formShell}>
-          <div data-parameter-section="Size">
-            <CollapsibleSection
-              title="Size"
-              columns
-              expanded={isSectionExpanded("Size", true)}
-              onExpandedChange={(expanded) =>
-                setSectionExpanded("Size", expanded)
+      }
+    >
+      <GeneratorPanelBody>
+        <div data-parameter-section="Size">
+          <CollapsibleSection
+            title="Size"
+            columns
+            expanded={isSectionExpanded("Size", true)}
+            onExpandedChange={(expanded) =>
+              setSectionExpanded("Size", expanded)
+            }
+          >
+            {renderSizeNumberField("widthUnits")}
+            {renderSizeNumberField("depthUnits")}
+            {renderSizeUnitSwitch()}
+            {renderGridAlignmentField()}
+            {renderMeasurementField("heightUnits")}
+            {renderMeasurementField("wallThicknessMm", isSolidBlock)}
+            <BooleanField
+              label="Solid Block"
+              checked={params.filledIn}
+              fullWidth
+              onChange={(filledIn) =>
+                updateParams((current) => ({ ...current, filledIn }))
               }
-            >
-              {renderSizeNumberField("widthUnits")}
-              {renderSizeNumberField("depthUnits")}
-              {renderSizeUnitSwitch()}
-              {renderGridAlignmentField()}
-              {renderMeasurementField("heightUnits")}
-              {renderMeasurementField("wallThicknessMm", isSolidBlock)}
-              <BooleanField
-                label="Solid Block"
-                checked={params.filledIn}
-                fullWidth
-                onChange={(filledIn) =>
-                  updateParams((current) => ({ ...current, filledIn }))
-                }
-              />
-            </CollapsibleSection>
-          </div>
-
-          <div data-parameter-section="Label">
-            <CollapsibleSection
-              title="Label"
-              columns
-              expanded={isSectionExpanded("Label", true)}
-              onExpandedChange={(expanded) =>
-                setSectionExpanded("Label", expanded)
-              }
-            >
-              <SelectField
-                label="Label Shelf"
-                value={params.labelStyle}
-                options={labelStyleOptions}
-                fullWidth
-                disabled={isSolidBlock}
-                onChange={(labelStyle) =>
-                  updateParams((current) => ({ ...current, labelStyle }))
-                }
-              />
-              <SelectField
-                label="Label Position"
-                value={params.labelPosition}
-                options={labelPositionOptions}
-                disabled={labelDisabled}
-                onChange={(labelPosition) =>
-                  updateParams((current) => ({ ...current, labelPosition }))
-                }
-              />
-              {labelDetailOptions.map(renderExtraOption)}
-            </CollapsibleSection>
-          </div>
-
-          <div data-parameter-section="Finger Slide">
-            <CollapsibleSection
-              title="Finger Slide"
-              columns
-              defaultCollapsed
-              expanded={isSectionExpanded("Finger Slide", false)}
-              onExpandedChange={(expanded) =>
-                setSectionExpanded("Finger Slide", expanded)
-              }
-            >
-              <SelectField
-                label="Finger Slide"
-                value={params.fingerslide}
-                options={fingerSlideOptions}
-                disabled={isSolidBlock}
-                fullWidth
-                onChange={(fingerslide) =>
-                  updateParams((current) => ({ ...current, fingerslide }))
-                }
-              />
-              {renderExtraOptions("Finger Slide Details")}
-            </CollapsibleSection>
-          </div>
-
-          <div data-parameter-section="Compartments">
-            <CollapsibleSection
-              title="Compartments"
-              columns
-              expanded={isSectionExpanded("Compartments", true)}
-              onExpandedChange={(expanded) =>
-                setSectionExpanded("Compartments", expanded)
-              }
-            >
-              <CompartmentLayoutEditor
-                params={params}
-                unit={compartmentUnit}
-                disabled={isSolidBlock}
-                onUnitChange={setCompartmentUnit}
-                onChange={(nextParams) => {
-                  setDraft((current) => ({
-                    ...current,
-                    verticalChambers: String(nextParams.verticalChambers),
-                    horizontalChambers: String(nextParams.horizontalChambers),
-                  }));
-                  updateParams(nextParams);
-                }}
-              />
-              {renderSubdivisionOptions([
-                "chamber_wall_thickness",
-                "chamber_wall_headroom",
-                "chamber_wall_top_radius",
-              ])}
-              <details className={binStyles.advancedDividerSettings}>
-                <summary>Advanced X Divider Geometry</summary>
-                <div className={binStyles.advancedDividerGrid}>
-                  {renderSubdivisionOptions([
-                    "vertical_separator_bend_separation",
-                    "vertical_separator_bend_angle",
-                    "vertical_separator_bend_position",
-                    "vertical_separator_cut_depth",
-                  ])}
-                </div>
-              </details>
-              <details className={binStyles.advancedDividerSettings}>
-                <summary>Advanced Y Divider Geometry</summary>
-                <div className={binStyles.advancedDividerGrid}>
-                  {renderSubdivisionOptions([
-                    "horizontal_separator_bend_separation",
-                    "horizontal_separator_bend_angle",
-                    "horizontal_separator_bend_position",
-                    "horizontal_separator_cut_depth",
-                  ])}
-                </div>
-              </details>
-            </CollapsibleSection>
-          </div>
-
-          <div data-parameter-section="Base">
-            <CollapsibleSection
-              title="Base"
-              columns
-              defaultCollapsed
-              expanded={isSectionExpanded("Base", false)}
-              onExpandedChange={(expanded) =>
-                setSectionExpanded("Base", expanded)
-              }
-            >
-              <SelectField
-                label="Flat Base"
-                value={params.flatBase}
-                options={flatBaseOptions}
-                disabled={isSolidBlock}
-                onChange={(flatBase) =>
-                  updateParams((current) => ({ ...current, flatBase }))
-                }
-              />
-              {renderExtraOptionByKey("Base", "efficient_floor")}
-              {renderExtraOptionByKey("Base", "floor_thickness")}
-              {renderExtraOptionByKey("Base", "cavity_floor_radius")}
-              {renderExtraOptionByKey("Base", "sub_pitch")}
-              {renderExtraOptionByKey("Base", "spacer")}
-              {renderExtraOptionByKey("Base", "minimum_printable_pad_size")}
-              {renderExtraOptionByKey("Base", "flat_base_rounded_radius")}
-              {renderExtraOptionByKey("Base", "flat_base_rounded_easyPrint")}
-              <BooleanField
-                label="Corner Magnets"
-                checked={params.magnets}
-                disabled={isSolidBlock}
-                fullWidth
-                onChange={(magnets) =>
-                  updateParams((current) => ({ ...current, magnets }))
-                }
-              />
-              {renderExtraOptionByKey("Base", "magnet_size")}
-              {renderExtraOptionByKey("Base", "magnet_easy_release")}
-              {renderExtraOptionByKey("Base", "magnet_side_access")}
-              {renderExtraOptionByKey("Base", "magnet_captive_height")}
-              {renderExtraOptionByKey("Base", "magnet_crush_depth")}
-              {renderExtraOptionByKey("Base", "magnet_chamfer")}
-              <BooleanField
-                label="Center Magnet"
-                checked={centerMagnetEnabled}
-                disabled={isSolidBlock}
-                fullWidth
-                onChange={(enabled) =>
-                  updateExtraDefine(
-                    "center_magnet_size",
-                    enabled ? defaultCenterMagnetSize : [0, 0],
-                  )
-                }
-              />
-              {renderExtraOptionByKey("Base", "center_magnet_size")}
-              <BooleanField
-                label="Screws"
-                checked={params.screws}
-                disabled={isSolidBlock}
-                fullWidth
-                onChange={(screws) =>
-                  updateParams((current) => ({ ...current, screws }))
-                }
-              />
-              {renderExtraOptionByKey("Base", "screw_size")}
-              {renderExtraOptionByKey("Base", "hole_overhang_remedy")}
-              {renderExtraOptionByKey("Base", "box_corner_attachments_only")}
-            </CollapsibleSection>
-          </div>
-
-          <div data-parameter-section="Front Access">
-            <CollapsibleSection
-              title="Front Access"
-              columns
-              defaultCollapsed
-              expanded={isSectionExpanded("Front Access", false)}
-              onExpandedChange={(expanded) =>
-                setSectionExpanded("Front Access", expanded)
-              }
-            >
-              {renderExtraOptions("Tapered Corner")}
-              {renderExtraOptions("Sliding Lid")}
-            </CollapsibleSection>
-          </div>
-
-          <div data-parameter-section="Bin Lip">
-            <CollapsibleSection
-              title="Bin Lip"
-              columns
-              defaultCollapsed
-              expanded={isSectionExpanded("Bin Lip", false)}
-              onExpandedChange={(expanded) =>
-                setSectionExpanded("Bin Lip", expanded)
-              }
-            >
-              <SelectField
-                label="Lip Style"
-                value={params.lipStyle}
-                options={lipStyleOptions}
-                fullWidth
-                disabled={isSolidBlock}
-                onChange={(lipStyle) =>
-                  updateParams((current) => ({ ...current, lipStyle }))
-                }
-              />
-              {renderExtraOptions("Bin Lip")}
-            </CollapsibleSection>
-          </div>
-
-          <div data-parameter-section="Wall Cutouts">
-            <CollapsibleSection
-              title="Wall Cutouts"
-              columns
-              defaultCollapsed
-              expanded={isSectionExpanded("Wall Cutouts", false)}
-              onExpandedChange={(expanded) =>
-                setSectionExpanded("Wall Cutouts", expanded)
-              }
-            >
-              {renderExtraOptions("Wall Cutouts")}
-            </CollapsibleSection>
-          </div>
-
-          <div data-parameter-section="Wall Pattern">
-            <CollapsibleSection
-              title="Wall Pattern"
-              columns
-              defaultCollapsed
-              expanded={isSectionExpanded("Wall Pattern", false)}
-              onExpandedChange={(expanded) =>
-                setSectionExpanded("Wall Pattern", expanded)
-              }
-            >
-              {renderExtraOptions("Wall Pattern")}
-            </CollapsibleSection>
-          </div>
-
-          <div data-parameter-section="Floor Pattern">
-            <CollapsibleSection
-              title="Floor Pattern"
-              columns
-              defaultCollapsed
-              expanded={isSectionExpanded("Floor Pattern", false)}
-              onExpandedChange={(expanded) =>
-                setSectionExpanded("Floor Pattern", expanded)
-              }
-            >
-              {renderExtraOptions("Floor Pattern")}
-            </CollapsibleSection>
-          </div>
+            />
+          </CollapsibleSection>
         </div>
-      </div>
 
-      <div className={styles.panelActions}>
+        <div data-parameter-section="Label">
+          <CollapsibleSection
+            title="Label"
+            columns
+            expanded={isSectionExpanded("Label", true)}
+            onExpandedChange={(expanded) =>
+              setSectionExpanded("Label", expanded)
+            }
+          >
+            <SelectField
+              label="Label Shelf"
+              value={params.labelStyle}
+              options={labelStyleOptions}
+              fullWidth
+              disabled={isSolidBlock}
+              onChange={(labelStyle) =>
+                updateParams((current) => ({ ...current, labelStyle }))
+              }
+            />
+            <SelectField
+              label="Label Position"
+              value={params.labelPosition}
+              options={labelPositionOptions}
+              disabled={labelDisabled}
+              onChange={(labelPosition) =>
+                updateParams((current) => ({ ...current, labelPosition }))
+              }
+            />
+            {labelDetailOptions.map(renderExtraOption)}
+          </CollapsibleSection>
+        </div>
+
+        <div data-parameter-section="Finger Slide">
+          <CollapsibleSection
+            title="Finger Slide"
+            columns
+            defaultCollapsed
+            expanded={isSectionExpanded("Finger Slide", false)}
+            onExpandedChange={(expanded) =>
+              setSectionExpanded("Finger Slide", expanded)
+            }
+          >
+            <SelectField
+              label="Finger Slide"
+              value={params.fingerslide}
+              options={fingerSlideOptions}
+              disabled={isSolidBlock}
+              fullWidth
+              onChange={(fingerslide) =>
+                updateParams((current) => ({ ...current, fingerslide }))
+              }
+            />
+            {renderExtraOptions("Finger Slide Details")}
+          </CollapsibleSection>
+        </div>
+
+        <div data-parameter-section="Compartments">
+          <CollapsibleSection
+            title="Compartments"
+            columns
+            expanded={isSectionExpanded("Compartments", true)}
+            onExpandedChange={(expanded) =>
+              setSectionExpanded("Compartments", expanded)
+            }
+          >
+            <CompartmentLayoutEditor
+              params={params}
+              unit={compartmentUnit}
+              disabled={isSolidBlock}
+              onUnitChange={setCompartmentUnit}
+              onChange={(nextParams) => {
+                setDraft((current) => ({
+                  ...current,
+                  verticalChambers: String(nextParams.verticalChambers),
+                  horizontalChambers: String(nextParams.horizontalChambers),
+                }));
+                updateParams(nextParams);
+              }}
+            />
+            {renderSubdivisionOptions([
+              "chamber_wall_thickness",
+              "chamber_wall_headroom",
+              "chamber_wall_top_radius",
+            ])}
+            <details className={binStyles.advancedDividerSettings}>
+              <summary>Advanced X Divider Geometry</summary>
+              <div className={binStyles.advancedDividerGrid}>
+                {renderSubdivisionOptions([
+                  "vertical_separator_bend_separation",
+                  "vertical_separator_bend_angle",
+                  "vertical_separator_bend_position",
+                  "vertical_separator_cut_depth",
+                ])}
+              </div>
+            </details>
+            <details className={binStyles.advancedDividerSettings}>
+              <summary>Advanced Y Divider Geometry</summary>
+              <div className={binStyles.advancedDividerGrid}>
+                {renderSubdivisionOptions([
+                  "horizontal_separator_bend_separation",
+                  "horizontal_separator_bend_angle",
+                  "horizontal_separator_bend_position",
+                  "horizontal_separator_cut_depth",
+                ])}
+              </div>
+            </details>
+          </CollapsibleSection>
+        </div>
+
+        <div data-parameter-section="Base">
+          <CollapsibleSection
+            title="Base"
+            columns
+            defaultCollapsed
+            expanded={isSectionExpanded("Base", false)}
+            onExpandedChange={(expanded) =>
+              setSectionExpanded("Base", expanded)
+            }
+          >
+            <SelectField
+              label="Flat Base"
+              value={params.flatBase}
+              options={flatBaseOptions}
+              disabled={isSolidBlock}
+              onChange={(flatBase) =>
+                updateParams((current) => ({ ...current, flatBase }))
+              }
+            />
+            {renderExtraOptionByKey("Base", "efficient_floor")}
+            {renderExtraOptionByKey("Base", "floor_thickness")}
+            {renderExtraOptionByKey("Base", "cavity_floor_radius")}
+            {renderExtraOptionByKey("Base", "sub_pitch")}
+            {renderExtraOptionByKey("Base", "spacer")}
+            {renderExtraOptionByKey("Base", "minimum_printable_pad_size")}
+            {renderExtraOptionByKey("Base", "flat_base_rounded_radius")}
+            {renderExtraOptionByKey("Base", "flat_base_rounded_easyPrint")}
+            <BooleanField
+              label="Corner Magnets"
+              checked={params.magnets}
+              disabled={isSolidBlock}
+              fullWidth
+              onChange={(magnets) =>
+                updateParams((current) => ({ ...current, magnets }))
+              }
+            />
+            {renderExtraOptionByKey("Base", "magnet_size")}
+            {renderExtraOptionByKey("Base", "magnet_easy_release")}
+            {renderExtraOptionByKey("Base", "magnet_side_access")}
+            {renderExtraOptionByKey("Base", "magnet_captive_height")}
+            {renderExtraOptionByKey("Base", "magnet_crush_depth")}
+            {renderExtraOptionByKey("Base", "magnet_chamfer")}
+            <BooleanField
+              label="Center Magnet"
+              checked={centerMagnetEnabled}
+              disabled={isSolidBlock}
+              fullWidth
+              onChange={(enabled) =>
+                updateExtraDefine(
+                  "center_magnet_size",
+                  enabled ? defaultCenterMagnetSize : [0, 0],
+                )
+              }
+            />
+            {renderExtraOptionByKey("Base", "center_magnet_size")}
+            <BooleanField
+              label="Screws"
+              checked={params.screws}
+              disabled={isSolidBlock}
+              fullWidth
+              onChange={(screws) =>
+                updateParams((current) => ({ ...current, screws }))
+              }
+            />
+            {renderExtraOptionByKey("Base", "screw_size")}
+            {renderExtraOptionByKey("Base", "hole_overhang_remedy")}
+            {renderExtraOptionByKey("Base", "box_corner_attachments_only")}
+          </CollapsibleSection>
+        </div>
+
+        <div data-parameter-section="Front Access">
+          <CollapsibleSection
+            title="Front Access"
+            columns
+            defaultCollapsed
+            expanded={isSectionExpanded("Front Access", false)}
+            onExpandedChange={(expanded) =>
+              setSectionExpanded("Front Access", expanded)
+            }
+          >
+            {renderExtraOptions("Tapered Corner")}
+            {renderExtraOptions("Sliding Lid")}
+          </CollapsibleSection>
+        </div>
+
+        <div data-parameter-section="Bin Lip">
+          <CollapsibleSection
+            title="Bin Lip"
+            columns
+            defaultCollapsed
+            expanded={isSectionExpanded("Bin Lip", false)}
+            onExpandedChange={(expanded) =>
+              setSectionExpanded("Bin Lip", expanded)
+            }
+          >
+            <SelectField
+              label="Lip Style"
+              value={params.lipStyle}
+              options={lipStyleOptions}
+              fullWidth
+              disabled={isSolidBlock}
+              onChange={(lipStyle) =>
+                updateParams((current) => ({ ...current, lipStyle }))
+              }
+            />
+            {renderExtraOptions("Bin Lip")}
+          </CollapsibleSection>
+        </div>
+
+        <div data-parameter-section="Wall Cutouts">
+          <CollapsibleSection
+            title="Wall Cutouts"
+            columns
+            defaultCollapsed
+            expanded={isSectionExpanded("Wall Cutouts", false)}
+            onExpandedChange={(expanded) =>
+              setSectionExpanded("Wall Cutouts", expanded)
+            }
+          >
+            {renderExtraOptions("Wall Cutouts")}
+          </CollapsibleSection>
+        </div>
+
+        <div data-parameter-section="Wall Pattern">
+          <CollapsibleSection
+            title="Wall Pattern"
+            columns
+            defaultCollapsed
+            expanded={isSectionExpanded("Wall Pattern", false)}
+            onExpandedChange={(expanded) =>
+              setSectionExpanded("Wall Pattern", expanded)
+            }
+          >
+            {renderExtraOptions("Wall Pattern")}
+          </CollapsibleSection>
+        </div>
+
+        <div data-parameter-section="Floor Pattern">
+          <CollapsibleSection
+            title="Floor Pattern"
+            columns
+            defaultCollapsed
+            expanded={isSectionExpanded("Floor Pattern", false)}
+            onExpandedChange={(expanded) =>
+              setSectionExpanded("Floor Pattern", expanded)
+            }
+          >
+            {renderExtraOptions("Floor Pattern")}
+          </CollapsibleSection>
+        </div>
+      </GeneratorPanelBody>
+
+      <GeneratorPanelActions>
         <div className={styles.actionRow}>
           <button
             className={styles.generateButton}
@@ -1470,7 +1475,7 @@ export function BinParametersPanel({
             <RotateCcw aria-hidden="true" size={16} />
           </button>
         </div>
-      </div>
-    </section>
+      </GeneratorPanelActions>
+    </GeneratorPanel>
   );
 }

@@ -83,11 +83,11 @@ def drawing(layers, profile, rotate):
     coords = [p for paths in converted.values() for path in paths for p in path]
     xmin, ymin = (min(p[i] for p in coords) for i in (0, 1))
     xmax, ymax = (max(p[i] for p in coords) for i in (0, 1))
-    # Side views need only enough clearance for the 0.65 mm outline stroke.
-    margin = 0.4 if profile == "side" else 1.2
+    # Leave clearance for the heavier outline, including round caps.
+    margin = 0.6 if profile == "side" else 1.2
     body = []
     for name, paths in converted.items():
-        weight = {"Visible": 0.65, "Hidden": 0.35, "Center": 0.25}[name]
+        weight = {"Visible": 1.05, "Hidden": 0.7, "Center": 0.6}[name]
         dash = {"Visible": "", "Hidden": ' stroke-dasharray="2 1"',
                 "Center": ' stroke-dasharray="6 1.5 1 1.5"'}[name]
         commands = []

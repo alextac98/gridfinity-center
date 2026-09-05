@@ -1,0 +1,152 @@
+.panel {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-height: 34px;
+    color: var(--panel-heading);
+}
+
+.header h2 {
+    flex: 1;
+    font-size: 15px;
+    font-weight: 760;
+}
+
+.body {
+    flex: 1;
+    min-height: 0;
+    margin-top: 22px;
+    margin-right: -12px;
+    overflow: auto;
+    padding-left: 4px;
+    padding-right: 12px;
+    scrollbar-gutter: stable;
+    scrollbar-color: color-mix(in srgb, var(--muted) 62%, transparent)
+        var(--surface);
+    scrollbar-width: thin;
+}
+
+.body::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+.body::-webkit-scrollbar-track {
+    border-radius: 999px;
+    background: var(--surface);
+}
+
+.body::-webkit-scrollbar-thumb {
+    border: 2px solid var(--surface);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--muted) 62%, transparent);
+}
+
+.body::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--muted) 82%, transparent);
+}
+
+.actions {
+    flex: 0 0 auto;
+    margin-top: 12px;
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+    background: var(--surface);
+}
+
+.sections {
+    display: grid;
+    gap: 18px;
+    padding-bottom: 4px;
+}
+
+/* Divide siblings at the group level, including search-section wrappers. */
+.sections > * + * {
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+}
+
+.section {
+    display: grid;
+    gap: 12px;
+}
+
+.section:has(> .sectionFields[hidden]) {
+    gap: 0;
+}
+
+.sectionFields[hidden] {
+    display: none;
+}
+
+.sectionToggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    min-height: 30px;
+    border: 0;
+    border-radius: 8px;
+    padding: 0 4px;
+    background: transparent;
+    color: var(--panel-heading);
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+}
+
+.sectionToggle:hover {
+    background: color-mix(in srgb, var(--brand-accent) 8%, transparent);
+}
+
+.sectionToggle:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--brand-accent) 56%, transparent);
+    outline-offset: 2px;
+}
+
+.sectionToggle h3 {
+    margin: 0;
+    color: var(--panel-heading);
+    font-size: 13px;
+    font-weight: 780;
+}
+
+.sectionToggle svg {
+    flex: 0 0 auto;
+    color: var(--muted);
+    transition: transform 150ms ease;
+}
+
+.sectionChevronCollapsed {
+    transform: rotate(180deg);
+}
+
+.sectionFields {
+    display: grid;
+    gap: 13px;
+    padding: 2px;
+}
+
+.twoColumnFields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 760px) {
+    .panel:has(> .body) {
+        min-height: 560px;
+    }
+}

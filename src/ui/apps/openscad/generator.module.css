@@ -10,7 +10,6 @@
     min-height: 0;
 }
 
-.panel,
 .preview {
     min-width: 0;
     min-height: 0;
@@ -20,14 +19,6 @@
     box-shadow: var(--shadow);
 }
 
-.panel {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    padding: 16px;
-}
-
-.panelHeader,
 .previewToolbar,
 .toolbarStatus,
 .actionRow,
@@ -39,20 +30,9 @@
     align-items: center;
 }
 
-.panelHeader {
-    gap: 9px;
-    min-height: 34px;
-    color: var(--panel-heading);
-}
-
-.panelHeader h2,
 .previewToolbar span {
     font-size: 15px;
     font-weight: 760;
-}
-
-.panelHeader h2 {
-    flex: 1;
 }
 
 .parameterSearch {
@@ -183,123 +163,6 @@
 .searchResults p {
     margin: 0;
     padding: 10px;
-}
-
-.panelScroll {
-    flex: 1;
-    min-height: 0;
-    margin-top: 22px;
-    margin-right: -12px;
-    overflow: auto;
-    padding-left: 4px;
-    padding-right: 12px;
-    scrollbar-gutter: stable;
-    scrollbar-color: color-mix(in srgb, var(--muted) 62%, transparent)
-        var(--surface);
-    scrollbar-width: thin;
-}
-
-.panelScroll::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-}
-
-.panelScroll::-webkit-scrollbar-track {
-    border-radius: 999px;
-    background: var(--surface);
-}
-
-.panelScroll::-webkit-scrollbar-thumb {
-    border: 2px solid var(--surface);
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--muted) 62%, transparent);
-}
-
-.panelScroll::-webkit-scrollbar-thumb:hover {
-    background: color-mix(in srgb, var(--muted) 82%, transparent);
-}
-
-.panelActions {
-    flex: 0 0 auto;
-    margin-top: 12px;
-    border-top: 1px solid var(--border);
-    padding-top: 12px;
-    background: var(--surface);
-}
-
-.formShell {
-    display: grid;
-    gap: 18px;
-    padding-bottom: 4px;
-}
-
-.formSection {
-    display: grid;
-    gap: 12px;
-    border-top: 1px solid var(--border);
-    padding-top: 14px;
-}
-
-.formSectionCollapsed {
-    gap: 0;
-}
-
-.formSection:first-child {
-    border-top: 0;
-    padding-top: 0;
-}
-
-.sectionToggle {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    width: 100%;
-    min-height: 30px;
-    border: 0;
-    border-radius: 8px;
-    padding: 0 4px;
-    background: transparent;
-    color: var(--panel-heading);
-    cursor: pointer;
-    font: inherit;
-    text-align: left;
-}
-
-.sectionToggle:hover {
-    background: color-mix(in srgb, var(--brand-accent) 8%, transparent);
-}
-
-.sectionToggle:focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--brand-accent) 56%, transparent);
-    outline-offset: 2px;
-}
-
-.sectionToggle h3 {
-    margin: 0;
-    color: var(--panel-heading);
-    font-size: 13px;
-    font-weight: 780;
-}
-
-.sectionToggle svg {
-    flex: 0 0 auto;
-    color: var(--muted);
-    transition: transform 150ms ease;
-}
-
-.sectionChevronCollapsed {
-    transform: rotate(180deg);
-}
-
-.sectionFields {
-    display: grid;
-    gap: 13px;
-    padding: 2px;
-}
-
-.twoColumnFields {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .loadingPanel,
@@ -814,6 +677,12 @@
     white-space: nowrap;
 }
 
+.previewToolbarWithControls {
+    flex-wrap: wrap;
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
 .outputList {
     display: grid;
     gap: 12px;
@@ -840,14 +709,6 @@
     color: var(--output-strong);
     font-size: 14px;
     line-height: 1.35;
-}
-
-.groundPlaneControls {
-    display: grid;
-    gap: 12px;
-    margin-top: 16px;
-    border-top: 1px solid var(--border);
-    padding-top: 16px;
 }
 
 .buildPlateSizeRow {
@@ -1052,6 +913,10 @@
 }
 
 @media (max-width: 760px) {
+    .previewToolbarWithControls > span {
+        flex-basis: 100%;
+    }
+
     .appFrame {
         grid-template-columns: 1fr;
         flex: 1;

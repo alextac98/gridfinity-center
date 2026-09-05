@@ -33,18 +33,30 @@ test("centers text and grows or shrinks it to fit the available space", async ({
   const fitsAndCenters = () => textArea.evaluate((element) => {
     const box = element.getBoundingClientRect();
     const lines = [...element.querySelectorAll("strong, span")];
-    const rects = lines.map((line) => line.getBoundingClientRect());
-    return lines.every((line) => {
-      const range = document.createRange();
-      range.selectNodeContents(line);
-      const text = range.getBoundingClientRect();
-      return text.left >= box.left - 1 && text.right <= box.right + 1 &&
-        text.top >= box.top - 1 && text.bottom <= box.bottom + 1 &&
-        Math.abs((text.left + text.right) / 2 - (box.left + box.right) / 2) < 1;
-    }) && Math.abs(
+    // DOM ranges include invisible font ascender/descender space. Check the
+    // visible glyph bounds at the browser's actual font size instead.
+    const context = document.createElement("canvas").getContext("2d")!;
+    const rects = lines.map((line) => {
+      const rect = line.getBoundingClientRect();
+      const style = getComputedStyle(line);
+      context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+      const metrics = context.measureText(line.textContent || "");
+      const baseline = rect.top + (parseFloat(style.lineHeight) - metrics.fontBoundingBoxAscent - metrics.fontBoundingBoxDescent) / 2 + metrics.fontBoundingBoxAscent;
+      const startX = rect.left + (rect.width - metrics.width) / 2;
+      return {
+        left: startX - metrics.actualBoundingBoxLeft,
+        right: startX + metrics.actualBoundingBoxRight,
+        top: baseline - metrics.actualBoundingBoxAscent,
+        bottom: baseline + metrics.actualBoundingBoxDescent,
+      };
+    });
+    return rects.every((text) => text.left >= box.left - 1 && text.right <= box.right + 1 &&
+      text.top >= box.top - 1 && text.bottom <= box.bottom + 1 &&
+      Math.abs((text.left + text.right) / 2 - (box.left + box.right) / 2) < 1.5,
+    ) && Math.abs(
       (Math.min(...rects.map((rect) => rect.top)) + Math.max(...rects.map((rect) => rect.bottom))) / 2 -
       (box.top + box.bottom) / 2,
-    ) < 1;
+    ) < 1.5;
   });
 
   await itemName.fill("M3");
@@ -56,6 +68,10 @@ test("centers text and grows or shrinks it to fit the available space", async ({
   await expect.poll(fontSize).toBeLessThan(shortSize / 2);
   await expect.poll(fitsAndCenters).toBe(true);
 
+  for (const text of ["Égj Å", "M3 x 20", "Stainless steel / drawer 12"]) {
+    await itemName.fill(text);
+    await expect.poll(fitsAndCenters).toBe(true);
+  }
   await itemName.fill("M3");
   await expect.poll(fontSize).toBeCloseTo(shortSize, 1);
   await page.getByLabel("Additional Text").fill("Stainless steel / drawer 12");
@@ -67,8 +83,52 @@ test("centers text and grows or shrinks it to fit the available space", async ({
   await expect.poll(fontSize).toBeCloseTo(shortSize, 1);
 });
 
+test("fills the available text space with visible lettering in the PNG", async ({ page }) => {
+  await page.goto("/label-generator");
+  await expect(page.getByTestId("label-printer-preview")).toBeVisible();
+  const region = await page.getByTestId("label-text").evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    const label = element.parentElement!.parentElement!.getBoundingClientRect();
+    return { x: (box.x - label.x) / label.width, y: (box.y - label.y) / label.height,
+      width: box.width / label.width, height: box.height / label.height };
+  });
+  const pending = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download PNG" }).click();
+  const stream = await (await pending).createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
+  const result = await page.evaluate(async ({ base64, region }) => {
+    const image = new Image();
+    image.src = `data:image/png;base64,${base64}`;
+    await image.decode();
+    const canvas = document.createElement("canvas");
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const context = canvas.getContext("2d")!;
+    context.drawImage(image, 0, 0);
+    const width = Math.round(region.width * image.width);
+    const height = Math.round(region.height * image.height);
+    const pixels = context.getImageData(Math.round(region.x * image.width), Math.round(region.y * image.height), width, height).data;
+    let minX = width, maxX = -1, minY = height, maxY = -1;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (pixels[(y * width + x) * 4] >= 128) continue;
+        minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+      }
+    }
+    return { widthFill: (maxX - minX + 1) / width, heightFill: (maxY - minY + 1) / height,
+      centerY: (minY + maxY + 1) / 2 / height };
+  }, { base64: Buffer.concat(chunks).toString("base64"), region });
+  expect(result.widthFill).toBeGreaterThan(0.9);
+  // The larger QR leaves a narrower text column; width can limit font size.
+  expect(result.heightFill).toBeGreaterThan(0.7);
+  expect(result.centerY).toBeCloseTo(0.5, 1);
+});
+
 test("redraws vectors and text at zoomed size without changing the PNG", async ({ page }, testInfo) => {
   await page.goto("/label-generator");
+  await page.getByRole("button", { name: "Design", exact: true }).click();
   const viewport = page.getByLabel("Label preview viewport");
   const preview = page.getByTestId("label-preview-transform");
   const qr = page.getByTestId("label-qr");
@@ -133,6 +193,7 @@ for (const item of ["Socket cap", "Countersunk", "Hex bolt", "Hex nut", "Flat wa
       await expect.poll(() => preview.locator(`[data-artwork-profile="${profile}"] svg`)
         .evaluate((element) => {
           const svg = element as SVGSVGElement;
+          if (!svg.isConnected) return false;
           const box = svg.getBBox();
           const frame = svg.viewBox.baseVal;
           const rendered = svg.getBoundingClientRect();
@@ -189,31 +250,29 @@ for (const item of ["Socket cap", "Countersunk", "Hex bolt", "Hex nut", "Flat wa
         if (pixels[i] < 128 && pixels[i + 1] < 128 && pixels[i + 2] < 128) ink++;
       }
       const allPixels = context.getImageData(0, 0, image.width, image.height).data;
-      const blackAt = (x: number, y: number) => {
+      const whiteAt = (x: number, y: number) => {
         const index = (y * image.width + x) * 4;
-        return allPixels[index] < 32 && allPixels[index + 1] < 32 && allPixels[index + 2] < 32;
+        return allPixels[index] === 255 && allPixels[index + 1] === 255 && allPixels[index + 2] === 255;
       };
-      const inset = Math.floor(image.height * 0.006);
-      const corner = Math.ceil(image.height * 0.1);
-      let continuousBorder = true;
-      for (let x = corner; x < image.width - corner; x++) {
-        continuousBorder &&= blackAt(x, inset) && blackAt(x, image.height - inset - 1);
+      let borderless = true;
+      for (let x = 0; x < image.width; x++) {
+        borderless &&= whiteAt(x, 0) && whiteAt(x, image.height - 1);
       }
-      for (let y = corner; y < image.height - corner; y++) {
-        continuousBorder &&= blackAt(inset, y) && blackAt(image.width - inset - 1, y);
+      for (let y = 0; y < image.height; y++) {
+        borderless &&= whiteAt(0, y) && whiteAt(image.width - 1, y);
       }
       return {
         width: image.width, height: image.height,
         ink: ink / (regionWidth * regionHeight),
-        continuousBorder,
+        borderless,
       };
     }, { base64: png.toString("base64"), region: primaryRegion });
 
-    expect(result.width).toBe(980);
-    expect(result.height).toBe(336);
+    expect(result.width).toBe(1654);
+    expect(result.height).toBe(567);
     expect(result.ink).toBeGreaterThan(0.03);
     expect(result.ink).toBeLessThan(0.3);
-    expect(result.continuousBorder).toBe(true);
+    expect(result.borderless).toBe(true);
   });
 }
 
@@ -231,6 +290,10 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
       // the target viewport (the mobile settings panel has its own scrolling).
       await page.setViewportSize({ width: 1440, height: 1000 });
       await page.getByRole("button", { name: new RegExp(size) }).click();
+      const heightMm = size === "35 x 12" ? 12 : 25;
+      const marginTopMm = Number(await page.getByRole("spinbutton", { name: /Vertical margin/ }).inputValue());
+      const marginBottomMm = Number(await page.getByRole("spinbutton", { name: /Vertical margin/ }).inputValue());
+      const usableHeight = heightMm - marginTopMm - marginBottomMm;
       await page.setViewportSize(viewport);
       await expect.poll(async () => {
         const topBox = await preview.locator('[data-artwork-profile="top"]').boundingBox();
@@ -239,15 +302,17 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
         const copyBox = await preview.locator("strong").boundingBox();
         const labelBox = await preview.boundingBox();
         if (!topBox || !sideBox || !qrBox || !copyBox || !labelBox) return false;
-        return Math.abs(topBox.width - qrBox.width) < 1 &&
-          Math.abs(topBox.height - qrBox.height) < 1 &&
-          Math.abs(topBox.y - qrBox.y) < 1 &&
+        return topBox.width < qrBox.width &&
+          Math.abs(qrBox.width - qrBox.height) < 1 &&
+          Math.abs(qrBox.height - labelBox.height * usableHeight / heightMm) < 1 &&
+          Math.abs(qrBox.y - labelBox.y - labelBox.height * marginTopMm / heightMm) < 1 &&
+          Math.abs(topBox.y + topBox.height / 2 - qrBox.y - qrBox.height / 2) < 1 &&
           topBox.x + topBox.width < sideBox.x &&
           sideBox.x + sideBox.width < qrBox.x &&
           sideBox.y > topBox.y &&
           copyBox.y + copyBox.height <= sideBox.y &&
-          Math.abs(sideBox.height - labelBox.height * 0.301) < 1 &&
-          Math.abs(sideBox.y - labelBox.y - labelBox.height * 0.629) < 1 &&
+          Math.abs(sideBox.height - labelBox.height * usableHeight / heightMm * 0.6) < 1 &&
+          Math.abs(sideBox.y - labelBox.y - labelBox.height * (marginTopMm + usableHeight * 0.4) / heightMm) < 1 &&
           sideBox.y + sideBox.height <= labelBox.y + labelBox.height;
       }).toBe(true);
       await expect.poll(() => side.locator("svg").evaluate((svg) => {

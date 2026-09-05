@@ -1,6 +1,13 @@
 "use client";
 
 import {
+  CollapsibleSection,
+  GeneratorPanel,
+  GeneratorPanelActions,
+  GeneratorPanelBody,
+} from "@/ui/components/ui/GeneratorSidebar";
+
+import {
   Check,
   ChevronUp,
   Code2,
@@ -330,31 +337,30 @@ export function ModelOutputPanel({
   };
 
   return (
-    <section className={styles.panel} aria-label="Model Output">
-      <div className={styles.panelHeader}>
-        <PanelLeft aria-hidden="true" size={18} />
-        <h2>Model Output</h2>
-      </div>
-
-      <div className={styles.panelScroll}>
-        <div className={styles.outputList}>
-          <div>
-            <span>Model</span>
-            <strong>{modelSummary}</strong>
+    <GeneratorPanel
+      ariaLabel="Model Output"
+      title="Model Output"
+      icon={<PanelLeft aria-hidden="true" size={18} />}
+    >
+      <GeneratorPanelBody>
+        <CollapsibleSection title="Model details">
+          <div className={styles.outputList}>
+            <div>
+              <span>Model</span>
+              <strong>{modelSummary}</strong>
+            </div>
+            <div>
+              <span>Dimensions</span>
+              <strong>
+                {dimensions
+                  ? `${dimensions.width.toFixed(1)} x ${dimensions.depth.toFixed(1)} x ${dimensions.height.toFixed(1)} mm`
+                  : "Generate Model To Measure STL"}
+              </strong>
+            </div>
           </div>
-          <div>
-            <span>Dimensions</span>
-            <strong>
-              {dimensions
-                ? `${dimensions.width.toFixed(1)} x ${dimensions.depth.toFixed(1)} x ${dimensions.height.toFixed(1)} mm`
-                : "Generate Model To Measure STL"}
-            </strong>
-          </div>
-        </div>
-
-        <div className={styles.groundPlaneControls}>
+        </CollapsibleSection>
+        <CollapsibleSection title="Preview floor">
           <div className={styles.field}>
-            <span>Preview Floor</span>
             <div
               aria-label="Preview floor"
               className={`${styles.unitSwitch} ${styles.floorSwitch}`}
@@ -465,16 +471,15 @@ export function ModelOutputPanel({
                     })}
                   </div>
                 ) : null}
+              </div>
             </div>
           </div>
 
           {extraControls}
-        </div>
-      </div>
+        </CollapsibleSection>
+      </GeneratorPanelBody>
 
-      </div>
-
-      <div className={styles.panelActions}>
+      <GeneratorPanelActions>
         <div className={styles.outputActions} ref={outputMenuRef}>
           <div className={styles.splitAction}>
             <button
@@ -547,7 +552,7 @@ export function ModelOutputPanel({
             </div>
           ) : null}
         </div>
-      </div>
-    </section>
+      </GeneratorPanelActions>
+    </GeneratorPanel>
   );
 }

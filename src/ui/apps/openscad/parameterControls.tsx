@@ -9,65 +9,13 @@ import {
   ArrowUp,
   ArrowUpLeft,
   ArrowUpRight,
-  ChevronUp,
   CircleDot,
 } from "lucide-react";
-import type { ReactNode } from "react";
-import { useState } from "react";
 import type { OpenScadDefineValue } from "@/shared/openscad-defines";
 import type { ParameterOption, UnitSuffix } from "./parameterTypes";
 import styles from "./generator.module.css";
 
 export type AlignmentValue = "near" | "center" | "far";
-
-type CollapsibleSectionProps = {
-  title: string;
-  columns?: boolean;
-  defaultCollapsed?: boolean;
-  expanded?: boolean;
-  onExpandedChange?: (expanded: boolean) => void;
-  children: ReactNode;
-};
-
-export function CollapsibleSection({
-  title,
-  columns = false,
-  defaultCollapsed = false,
-  expanded,
-  onExpandedChange,
-  children,
-}: CollapsibleSectionProps) {
-  const [internalExpanded, setInternalExpanded] = useState(!defaultCollapsed);
-  const isExpanded = expanded ?? internalExpanded;
-  const setExpanded = onExpandedChange ?? setInternalExpanded;
-
-  return (
-    <section
-      className={`${styles.formSection} ${isExpanded ? "" : styles.formSectionCollapsed}`}
-    >
-      <button
-        aria-expanded={isExpanded}
-        className={styles.sectionToggle}
-        onClick={() => setExpanded(!isExpanded)}
-        type="button"
-      >
-        <h3>{title}</h3>
-        <ChevronUp
-          aria-hidden="true"
-          className={isExpanded ? "" : styles.sectionChevronCollapsed}
-          size={16}
-        />
-      </button>
-      {isExpanded ? (
-        <div
-          className={`${styles.sectionFields} ${columns ? styles.twoColumnFields : ""}`}
-        >
-          {children}
-        </div>
-      ) : null}
-    </section>
-  );
-}
 
 type NumberInputFieldProps = {
   label: string;

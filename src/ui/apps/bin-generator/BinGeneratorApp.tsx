@@ -1,5 +1,7 @@
 "use client";
 
+import { GeneratorPanel } from "@/ui/components/ui/GeneratorSidebar";
+
 import { PanelLeft, SlidersHorizontal } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { captureEvent } from "@/ui/analytics/posthog";
@@ -11,7 +13,7 @@ import {
   type GridfinityBinParameters,
 } from "@/shared/gridfinityExtended";
 import type { GridfinityAppProps } from "../types";
-import { GeneratorPanel, LoadingPanel, OpenScadGeneratorShell, PreviewLoading } from "../openscad/OpenScadGeneratorShell";
+import { LoadingPanel, OpenScadGeneratorShell, PreviewLoading } from "../openscad/OpenScadGeneratorShell";
 import { ModelOutputPanel } from "../openscad/ModelOutputPanel";
 import { OpenScadPreview } from "../openscad/OpenScadPreview";
 import {

@@ -38,13 +38,9 @@ export const apps = [
     eyebrow: "Labels",
     description:
       "Design printable labels for bins, drawers, and small part organizers.",
-    attribution: {
-      label: "GFLabel",
-      href: "https://github.com/ndevenish/gflabel",
-    },
     icon: Tag,
     Component: LabelGeneratorApp,
-    statusTag: "alpha",
+    statusTag: "beta",
     accent: "blue",
   },
 ] as const satisfies readonly GridfinityAppConfig[];

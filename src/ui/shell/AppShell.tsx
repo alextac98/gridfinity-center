@@ -551,19 +551,6 @@ export function AppShell() {
                   </a>
                   <a
                     className={styles.attributionItem}
-                    href="https://github.com/ndevenish/gflabel"
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    <span>
-                      <strong>GFLabel</strong>
-                      <small>
-                        Fastener drive and head-profile artwork geometry
-                      </small>
-                    </span>
-                  </a>
-                  <a
-                    className={styles.attributionItem}
                     href="https://threejs.org"
                     rel="noreferrer"
                     target="_blank"

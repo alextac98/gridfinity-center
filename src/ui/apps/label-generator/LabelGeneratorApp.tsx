@@ -1,6 +1,13 @@
 "use client";
 
 import {
+  CollapsibleSection,
+  GeneratorPanel,
+  GeneratorPanelActions,
+  GeneratorPanelBody,
+} from "@/ui/components/ui/GeneratorSidebar";
+
+import {
   Check,
   ChevronDown,
   Download,
@@ -29,10 +36,8 @@ import {
 import { ComboboxInput } from "@/ui/components/ui/ComboboxInput";
 import { captureEvent } from "@/ui/analytics/posthog";
 import {
-  GeneratorPanel,
   OpenScadGeneratorShell,
 } from "@/ui/apps/openscad/OpenScadGeneratorShell";
-import { CollapsibleSection } from "@/ui/apps/openscad/parameterControls";
 import type { GridfinityAppProps } from "../types";
 import {
   driveOptions,
@@ -45,12 +50,13 @@ import {
   type DriveId,
   type HeadProfileId,
 } from "./artwork/fastenerArtwork";
-import { getLabelLayout } from "./labelLayout";
+import { fitLabelMargins, getLabelLayout, scaleLabelMargins } from "./labelLayout";
 import {
   getLabelTextLayout,
   getLabelTextStyle,
-  labelFontFamily,
 } from "./labelText";
+import { labelExportDpi, renderLabelExportPng, renderPrinterPreviewPng, type LabelRasterOptions } from "./labelRaster";
+import { getPrinterMargins, getPrinterPixelSize, maxPrinterDpi, minPrinterDpi, printerPresets } from "./printerPresets";
 import styles from "./label-generator.module.css";
 
 type FastenerId =
@@ -486,6 +492,13 @@ const defaults = {
   headProfileId: defaultArtworkByFastener["socket-cap"].headProfileId,
   itemName: "Custom item",
   sizeId: "35x12",
+  expandedSections: {} as Record<string, boolean>,
+  printerId: "brother-p750w",
+  printerDpi: 360,
+  printerDpiY: 180,
+  marginsMm: getPrinterMargins("brother-p750w", 12)!,
+  usePrinterMargins: true,
+  showPrinterPreview: true,
   customWidthMm: 35,
   customHeightMm: 12,
   measurementSystem: "metric" as MeasurementSystem,
@@ -601,7 +614,39 @@ function readStoredLabelSettings(): LabelGeneratorSettings {
       ? requestedDriveId
       : storedHeadProfile.defaultDriveId;
 
+    const storedMargins = isRecord(parsed.marginsMm) ? parsed.marginsMm : {};
+    const horizontalMargin = Math.max(
+      readNumber(storedMargins.left, defaults.marginsMm.left, 0, maxLabelWidthMm),
+      readNumber(storedMargins.right, defaults.marginsMm.right, 0, maxLabelWidthMm),
+    );
+    const verticalMargin = Math.max(
+      readNumber(storedMargins.top, defaults.marginsMm.top, 0, maxLabelHeightMm),
+      readNumber(storedMargins.bottom, defaults.marginsMm.bottom, 0, maxLabelHeightMm),
+    );
+
+    const printerId = readString(parsed.printerId, defaults.printerId, ["custom", ...printerPresets.map((printer) => printer.id)]);
+    const preset = printerPresets.find((printer) => printer.id === printerId);
+    const storedDpi = Math.round(readNumber(parsed.printerDpi, defaults.printerDpi, minPrinterDpi, maxPrinterDpi));
+    const storedDpiY = Math.round(readNumber(parsed.printerDpiY, storedDpi, minPrinterDpi, maxPrinterDpi));
+    // Legacy presets did not distinguish print modes. Use the preset default;
+    // custom single-DPI settings retain their original square dot grid.
+    const mode = preset && (typeof parsed.printerDpiY === "number"
+      ? preset.modes.find((mode) => mode.dpiX === storedDpi && mode.dpiY === storedDpiY) ?? preset.modes[0]
+      : preset.modes[0]);
+
+    const storedSections = isRecord(parsed.expandedSections) ? parsed.expandedSections : {};
+    const expandedSections = Object.fromEntries(
+      Object.entries(storedSections).filter((entry): entry is [string, boolean] => typeof entry[1] === "boolean"),
+    );
+
     return {
+      expandedSections,
+      printerId,
+      printerDpi: mode?.dpiX ?? storedDpi,
+      printerDpiY: mode?.dpiY ?? storedDpiY,
+      marginsMm: { left: horizontalMargin, right: horizontalMargin, top: verticalMargin, bottom: verticalMargin },
+      usePrinterMargins: typeof parsed.usePrinterMargins === "boolean" ? parsed.usePrinterMargins : defaults.usePrinterMargins,
+      showPrinterPreview: typeof parsed.showPrinterPreview === "boolean" ? parsed.showPrinterPreview : defaults.showPrinterPreview,
       fastenerId: storedFastenerId,
       driveId: storedDriveId,
       headProfileId: storedHeadProfileId,
@@ -769,35 +814,8 @@ function FastenerPicture({
   );
 }
 
-function loadImage(src: string) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = reject;
-    image.src = src;
-  });
-}
-
 function svgToDataUrl(svg: string) {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-}
-
-function drawImageContained(
-  context: CanvasRenderingContext2D,
-  image: HTMLImageElement,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-) {
-  const imageRatio = image.naturalWidth / image.naturalHeight;
-  const boxRatio = width / height;
-  const drawWidth = imageRatio > boxRatio ? width : height * imageRatio;
-  const drawHeight = imageRatio > boxRatio ? width / imageRatio : height;
-  const drawX = x + (width - drawWidth) / 2;
-  const drawY = y + (height - drawHeight) / 2;
-
-  context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
 }
 
 function CustomArtworkImage({
@@ -1267,6 +1285,19 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
   const [headProfileId, setHeadProfileId] = useState(defaults.headProfileId);
   const [itemName, setItemName] = useState(defaults.itemName);
   const [sizeId, setSizeId] = useState(defaults.sizeId);
+  const [printerId, setPrinterId] = useState(defaults.printerId);
+  const [printerDpi, setPrinterDpi] = useState(defaults.printerDpi);
+  const [printerDpiY, setPrinterDpiY] = useState(defaults.printerDpiY);
+  const [marginsMm, setMarginsMm] = useState(defaults.marginsMm);
+  const [usePrinterMargins, setUsePrinterMargins] = useState(defaults.usePrinterMargins);
+  const [printerDpiDraft, setPrinterDpiDraft] = useState(String(defaults.printerDpi));
+  const [printerDpiYDraft, setPrinterDpiYDraft] = useState(String(defaults.printerDpiY));
+  const [showPrinterPreview, setShowPrinterPreview] = useState(defaults.showPrinterPreview);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
+  const [printRaster, setPrintRaster] = useState<{
+    options: LabelRasterOptions; url: string; error: string;
+  } | null>(null);
   const [customWidthMm, setCustomWidthMm] = useState(defaults.customWidthMm);
   const [customHeightMm, setCustomHeightMm] = useState(defaults.customHeightMm);
   const [customWidthDraft, setCustomWidthDraft] = useState(
@@ -1304,9 +1335,7 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
     scale: 1,
   });
   const [isPreviewPanning, setIsPreviewPanning] = useState(false);
-  const [expandedSections, setExpandedSections] = useState<
-    Record<string, boolean>
-  >({});
+  const [expandedSections, setExpandedSections] = useState(defaults.expandedSections);
   const [previewSurfaceSize, setPreviewSurfaceSize] = useState({
     width: 0,
     height: 0,
@@ -1402,6 +1431,77 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
     trimmedQrUrl.length > 0 &&
     qrCode.source === trimmedQrUrl &&
     qrCode.dataUrl.length > 0;
+  const presetMargins = useMemo(() => getPrinterMargins(printerId, labelSize.heightMm), [printerId, labelSize.heightMm]);
+  const appliedMargins = useMemo(() => fitLabelMargins(
+    usePrinterMargins && presetMargins ? presetMargins : marginsMm,
+    labelSize.widthMm, labelSize.heightMm,
+  ), [usePrinterMargins, presetMargins, marginsMm, labelSize.widthMm, labelSize.heightMm]);
+  const printableWidthMm = labelSize.widthMm - appliedMargins.left - appliedMargins.right;
+  const printableHeightMm = labelSize.heightMm - appliedMargins.top - appliedMargins.bottom;
+
+  function updateMargin(axis: "horizontal" | "vertical", value: string) {
+    const next = Number(value);
+    if (!value.trim() || !Number.isFinite(next)) return;
+    const size = axis === "horizontal" ? labelSize.widthMm : labelSize.heightMm;
+    const maximum = Math.max(0, (size - 1) / 2);
+    const margin = Math.round(Math.min(maximum, Math.max(0, next)) * 100) / 100;
+    setMarginsMm({ ...appliedMargins, ...(axis === "horizontal"
+      ? { left: margin, right: margin } : { top: margin, bottom: margin }) });
+    setUsePrinterMargins(false);
+  }
+  const selectedPrinter = printerPresets.find((printer) => printer.id === printerId);
+  const printerPixelSize = getPrinterPixelSize(labelSize.widthMm, labelSize.heightMm, { dpiX: printerDpi, dpiY: printerDpiY });
+  const rasterOptions = useMemo<LabelRasterOptions>(() => ({
+    widthMm: labelSize.widthMm,
+    heightMm: labelSize.heightMm,
+    resolution: { dpiX: printerDpi, dpiY: printerDpiY },
+    marginsMm: appliedMargins,
+    primaryText,
+    secondaryText,
+    topSource: customPrimaryImage || (isCustomArtwork ? "" : svgToDataUrl(
+      fastenerId === "nut" || fastenerId === "washer"
+        ? getHardwareSvgMarkup(fastenerId, "top") : getDriveSvgMarkup(driveId),
+    )),
+    sideSource: customSecondaryImage || (isCustomArtwork ? "" : svgToDataUrl(
+      fastenerId === "nut" || fastenerId === "washer"
+        ? getHardwareSvgMarkup(fastenerId, "side") : getHeadProfileSvgMarkup(headProfileId, false, driveId),
+    )),
+    qrSource: canShowQr ? qrCode.dataUrl : "",
+    showPrimary: showPrimaryImage,
+    showSecondary: showSecondaryImage,
+    showQr: canShowQr,
+  }), [labelSize.widthMm, labelSize.heightMm, printerDpi, printerDpiY, appliedMargins, primaryText, secondaryText,
+    customPrimaryImage, customSecondaryImage, isCustomArtwork, fastenerId, driveId,
+    headProfileId, canShowQr, qrCode.dataUrl, showPrimaryImage, showSecondaryImage]);
+  const currentPrintRaster = printRaster?.options === rasterOptions ? printRaster : null;
+  useEffect(() => {
+    if (!hasLoadedStoredSettings) return;
+    let active = true;
+    let url = "";
+    renderPrinterPreviewPng(rasterOptions).then((blob) => {
+      if (!active) return;
+      url = URL.createObjectURL(blob);
+      setPrintRaster({ options: rasterOptions, url, error: "" });
+    }).catch((error: unknown) => {
+      if (active) setPrintRaster({
+        options: rasterOptions, url: "",
+        error: error instanceof Error ? error.message : "Could not render the label.",
+      });
+    });
+    return () => {
+      active = false;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [rasterOptions, hasLoadedStoredSettings]);
+
+  function updatePrinterDpi(axis: "x" | "y", value: string) {
+    (axis === "x" ? setPrinterDpiDraft : setPrinterDpiYDraft)(value);
+    const next = Number(value);
+    if (value.trim() && Number.isInteger(next) && next >= minPrinterDpi && next <= maxPrinterDpi) {
+      (axis === "x" ? setPrinterDpi : setPrinterDpiY)(next);
+    }
+  }
+
   const previewRatio = `${labelSize.widthMm} / ${labelSize.heightMm}`;
   const previewWidthPx = labelSize.widthMm * previewPxPerMm;
   const previewHeightPx = labelSize.heightMm * previewPxPerMm;
@@ -1420,6 +1520,7 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
   const renderedPreviewHeight = previewHeightPx * boundedPreviewView.scale;
   const labelLayout = getLabelLayout(
     renderedPreviewWidth, renderedPreviewHeight, showPrimaryImage, showSecondaryImage, canShowQr,
+    scaleLabelMargins(appliedMargins, renderedPreviewWidth / labelSize.widthMm, renderedPreviewHeight / labelSize.heightMm),
   );
   const labelTextRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -1452,11 +1553,20 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
     const restoreTimer = window.setTimeout(() => {
       const settings = readStoredLabelSettings();
 
+      setExpandedSections(settings.expandedSections);
       setFastenerId(settings.fastenerId);
       setDriveId(settings.driveId);
       setHeadProfileId(settings.headProfileId);
       setItemName(settings.itemName);
       setSizeId(settings.sizeId);
+      setPrinterId(settings.printerId);
+      setPrinterDpi(settings.printerDpi);
+      setPrinterDpiY(settings.printerDpiY);
+      setMarginsMm(settings.marginsMm);
+      setUsePrinterMargins(settings.usePrinterMargins);
+      setPrinterDpiDraft(String(settings.printerDpi));
+      setPrinterDpiYDraft(String(settings.printerDpiY));
+      setShowPrinterPreview(settings.showPrinterPreview);
       setCustomWidthMm(settings.customWidthMm);
       setCustomHeightMm(settings.customHeightMm);
       setCustomWidthDraft(String(settings.customWidthMm));
@@ -1487,11 +1597,18 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
     }
 
     writeStoredLabelSettings({
+      expandedSections,
       fastenerId,
       driveId,
       headProfileId,
       itemName,
       sizeId,
+      printerId,
+      printerDpi,
+      printerDpiY,
+      marginsMm,
+      usePrinterMargins,
+      showPrinterPreview,
       customWidthMm,
       customHeightMm,
       measurementSystem,
@@ -1510,6 +1627,7 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
       customSecondaryImage,
     });
   }, [
+    expandedSections,
     customPrimaryImage,
     customSecondaryImage,
     customHeightMm,
@@ -1530,6 +1648,12 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
     showSecondaryImage,
     showStandard,
     sizeId,
+    printerId,
+    printerDpi,
+    printerDpiY,
+    marginsMm,
+    usePrinterMargins,
+    showPrinterPreview,
     standardMode,
     threadSize,
   ]);
@@ -1671,6 +1795,14 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
     setHeadProfileId(defaultLabelSettings.headProfileId);
     setItemName(defaultLabelSettings.itemName);
     setSizeId(defaultLabelSettings.sizeId);
+    setPrinterId(defaultLabelSettings.printerId);
+    setPrinterDpi(defaultLabelSettings.printerDpi);
+    setPrinterDpiY(defaultLabelSettings.printerDpiY);
+    setMarginsMm(defaultLabelSettings.marginsMm);
+    setUsePrinterMargins(defaultLabelSettings.usePrinterMargins);
+    setPrinterDpiDraft(String(defaultLabelSettings.printerDpi));
+    setPrinterDpiYDraft(String(defaultLabelSettings.printerDpiY));
+    setShowPrinterPreview(defaultLabelSettings.showPrinterPreview);
     setCustomWidthMm(defaultLabelSettings.customWidthMm);
     setCustomHeightMm(defaultLabelSettings.customHeightMm);
     setCustomWidthDraft(String(defaultLabelSettings.customWidthMm));
@@ -2184,107 +2316,29 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
   }
 
   async function downloadPng() {
-    const pxPerMm = 28;
-    const width = Math.round(labelSize.widthMm * pxPerMm);
-    const height = Math.round(labelSize.heightMm * pxPerMm);
-    const canvas = document.createElement("canvas");
-    const context = canvas.getContext("2d");
-
-    if (!context) {
-      return;
+    if (isExporting) return;
+    setIsExporting(true);
+    setExportError("");
+    try {
+      const blob = await renderLabelExportPng(rasterOptions);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.download = `gridfinity-label-${labelSize.id}-${trimmedThreadSize.toLowerCase() || "custom"}.png`;
+      link.href = url;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      captureEvent("label_exported", {
+        label_size: labelSize.id,
+        label_width_mm: labelSize.widthMm,
+        label_height_mm: labelSize.heightMm,
+        format: "png",
+        export_dpi: labelExportDpi,
+      });
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : "Could not export the label PNG.");
+    } finally {
+      setIsExporting(false);
     }
-
-    canvas.width = width;
-    canvas.height = height;
-    context.fillStyle = "#ffffff";
-    context.fillRect(0, 0, width, height);
-    const layout = getLabelLayout(
-      width, height, showPrimaryImage, showSecondaryImage, canShowQr,
-    );
-    context.strokeStyle = "#000000";
-    context.lineWidth = layout.borderWidth;
-    const borderInset = layout.borderWidth / 2;
-    context.beginPath();
-    context.roundRect(
-      borderInset, borderInset, width - layout.borderWidth, height - layout.borderWidth,
-      layout.borderRadius - borderInset,
-    );
-    context.stroke();
-    const topArtworkSource =
-      customPrimaryImage ||
-      (isCustomArtwork
-        ? ""
-        : svgToDataUrl(
-            fastenerId === "nut" || fastenerId === "washer"
-              ? getHardwareSvgMarkup(fastenerId, "top")
-              : getDriveSvgMarkup(driveId),
-          ));
-    const sideArtworkSource =
-      customSecondaryImage ||
-      (isCustomArtwork
-        ? ""
-        : svgToDataUrl(
-            fastenerId === "nut" || fastenerId === "washer"
-              ? getHardwareSvgMarkup(fastenerId, "side")
-              : getHeadProfileSvgMarkup(headProfileId, false, driveId),
-          ));
-    const shouldDrawPrimary = showPrimaryImage && topArtworkSource;
-    const shouldDrawSecondary = showSecondaryImage && sideArtworkSource;
-    if (shouldDrawPrimary) {
-      const image = await loadImage(topArtworkSource);
-      drawImageContained(
-        context, image, layout.padding, layout.top, layout.edgeSize, layout.edgeSize,
-      );
-    }
-
-    const textLayout = getLabelTextLayout(
-      context, primaryText, secondaryText, layout.contentWidth, layout.copyHeight,
-    );
-    context.fillStyle = "#000000";
-    context.textBaseline = "alphabetic";
-    context.textAlign = "center";
-    for (const [text, weight, line] of [
-      [primaryText, 800, textLayout.primary],
-      [secondaryText, 500, textLayout.secondary],
-    ] as const) {
-      if (!text) continue;
-      context.font = `${weight} ${line.fontSize}px ${labelFontFamily}`;
-      context.fillText(
-        text,
-        layout.contentLeft + layout.contentWidth / 2,
-        layout.contentTop + line.baseline,
-      );
-    }
-
-    if (shouldDrawSecondary) {
-      const image = await loadImage(sideArtworkSource);
-      drawImageContained(
-        context,
-        image,
-        layout.contentLeft,
-        layout.sideTop,
-        layout.contentWidth,
-        layout.sideHeight,
-      );
-    }
-
-    if (canShowQr) {
-      const image = await loadImage(qrCode.dataUrl);
-      context.drawImage(
-        image, layout.qrLeft, layout.top, layout.edgeSize, layout.edgeSize,
-      );
-    }
-
-    captureEvent("label_exported", {
-      label_size: labelSize.id,
-      label_width_mm: labelSize.widthMm,
-      label_height_mm: labelSize.heightMm,
-      format: "png",
-    });
-    const link = document.createElement("a");
-    link.download = `gridfinity-label-${labelSize.id}-${trimmedThreadSize.toLowerCase() || "custom"}.png`;
-    link.href = canvas.toDataURL("image/png");
-    link.click();
   }
 
   return (
@@ -2296,60 +2350,54 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
           icon={<SlidersHorizontal aria-hidden="true" size={18} />}
           title="Label Parameters"
         >
-          <div className={styles.panelScroll}>
-            <div className={styles.formShell}>
-              <div data-parameter-section="Type">
-                <CollapsibleSection
-                  title="Type"
-                  expanded={isSectionExpanded("Type", true)}
-                  onExpandedChange={(expanded) =>
-                    setSectionExpanded("Type", expanded)
-                  }
-                >
-                  <div className={styles.fullDetailField}>
-                    <ItemTypePicker
-                      customPrimaryImage={customPrimaryImage}
-                      customSecondaryImage={customSecondaryImage}
-                      driveId={driveId}
-                      headProfileId={headProfileId}
-                      onChange={selectItemType}
-                      value={itemTypeValue}
-                    />
-                  </div>
-                  {selectedItemTypeId === "screw" ? (
-                    <FastenerStylePicker
-                      driveId={driveId}
-                      headProfileId={headProfileId}
-                      onChange={selectFastenerStyle}
-                    />
-                  ) : null}
-                  <div className={`${styles.detailsGrid} ${styles.typeDetailsGrid}`}>
-                    {renderDetailField("primaryImage")}
-                    {renderDetailField("secondaryImage")}
-                    {renderDetailField("qrUrl")}
-                  </div>
-                </CollapsibleSection>
+          <GeneratorPanelBody>
+            <CollapsibleSection
+              title="Type"
+              expanded={isSectionExpanded("Type", true)}
+              onExpandedChange={(expanded) =>
+                setSectionExpanded("Type", expanded)
+              }
+            >
+              <div className={styles.fullDetailField}>
+                <ItemTypePicker
+                  customPrimaryImage={customPrimaryImage}
+                  customSecondaryImage={customSecondaryImage}
+                  driveId={driveId}
+                  headProfileId={headProfileId}
+                  onChange={selectItemType}
+                  value={itemTypeValue}
+                />
               </div>
-
-              <div data-parameter-section="Details">
-                <CollapsibleSection
-                  title="Details"
-                  expanded={isSectionExpanded("Details", true)}
-                  onExpandedChange={(expanded) =>
-                    setSectionExpanded("Details", expanded)
-                  }
-                >
-                  <div className={styles.detailsGrid}>
-                    {visibleDetailFields.map((fieldId) =>
-                      renderDetailField(fieldId),
-                    )}
-                  </div>
-                </CollapsibleSection>
+              {selectedItemTypeId === "screw" ? (
+                <FastenerStylePicker
+                  driveId={driveId}
+                  headProfileId={headProfileId}
+                  onChange={selectFastenerStyle}
+                />
+              ) : null}
+              <div className={`${styles.detailsGrid} ${styles.typeDetailsGrid}`}>
+                {renderDetailField("primaryImage")}
+                {renderDetailField("secondaryImage")}
+                {renderDetailField("qrUrl")}
               </div>
-            </div>
-          </div>
+            </CollapsibleSection>
 
-          <div className={styles.panelActions}>
+            <CollapsibleSection
+              title="Details"
+              expanded={isSectionExpanded("Details", true)}
+              onExpandedChange={(expanded) =>
+                setSectionExpanded("Details", expanded)
+              }
+            >
+              <div className={styles.detailsGrid}>
+                {visibleDetailFields.map((fieldId) =>
+                  renderDetailField(fieldId),
+                )}
+              </div>
+            </CollapsibleSection>
+          </GeneratorPanelBody>
+
+          <GeneratorPanelActions>
             <button
               className={styles.secondaryButton}
               onClick={resetLabel}
@@ -2358,15 +2406,32 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
               <RotateCcw aria-hidden="true" size={16} />
               Reset Label
             </button>
-          </div>
+          </GeneratorPanelActions>
         </GeneratorPanel>
       }
       previewAriaLabel="Label Preview"
       previewTitle="Label Preview"
-      previewStatus={sizeDescription}
+      previewControls={
+        <div className={styles.previewModeControls}>
+          <div className={styles.previewModeSelector} role="group" aria-label="Label preview mode">
+            <button type="button" aria-pressed={!showPrinterPreview} onClick={() => setShowPrinterPreview(false)}>
+              Design
+            </button>
+            <button type="button" aria-pressed={showPrinterPreview} onClick={() => setShowPrinterPreview(true)}>
+              Print Preview
+            </button>
+          </div>
+          {showPrinterPreview ? (
+            <span className={styles.previewDpi} data-testid="preview-dpi" title="Horizontal × vertical printer resolution">
+              {printerDpi} × {printerDpiY} DPI
+            </span>
+          ) : null}
+        </div>
+      }
       preview={
         <div
           aria-label="Label preview viewport"
+          title={sizeDescription}
           className={styles.previewSurface}
           data-panning={isPreviewPanning}
           onPointerCancel={stopPreviewPan}
@@ -2402,19 +2467,18 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
           >
             <div
               className={styles.label}
+              data-printer-preview={showPrinterPreview}
               style={{
                 aspectRatio: previewRatio,
                 width: `${renderedPreviewWidth}px`,
                 height: `${renderedPreviewHeight}px`,
-                borderRadius: labelLayout.borderRadius,
-                "--label-border-width": `${labelLayout.borderWidth}px`,
               } as CSSProperties}
             >
               {showPrimaryImage ? (
                 <div
                   className={styles.topProfileSlot}
                   style={{
-                    left: labelLayout.padding, top: labelLayout.top,
+                    left: labelLayout.primaryLeft, top: labelLayout.top,
                     width: labelLayout.edgeSize, height: labelLayout.edgeSize,
                   }}
                 >
@@ -2480,10 +2544,26 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
                   src={qrCode.dataUrl}
                   alt=""
                   style={{
-                    left: labelLayout.qrLeft, top: labelLayout.top,
-                    width: labelLayout.edgeSize, height: labelLayout.edgeSize,
+                    left: labelLayout.qrLeft, top: labelLayout.qrTop,
+                    width: labelLayout.qrSize, height: labelLayout.qrSize,
                   }}
                 />
+              ) : null}
+              {showPrinterPreview ? (
+                currentPrintRaster?.url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    className={styles.printerRaster}
+                    data-testid="label-printer-preview"
+                    src={currentPrintRaster.url}
+                    alt={`Printer simulation at ${printerDpi} × ${printerDpiY} DPI (horizontal × vertical): ${printerPixelSize.width} by ${printerPixelSize.height} dots`}
+                    draggable={false}
+                  />
+                ) : (
+                  <div className={styles.printerRasterPending} role="status">
+                    {currentPrintRaster?.error || "Updating print preview…"}
+                  </div>
+                )
               ) : null}
             </div>
           </div>
@@ -2495,9 +2575,12 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
           icon={<PanelLeft aria-hidden="true" size={18} />}
           title="Output Settings"
         >
-          <div className={styles.panelScroll}>
-            <div className={styles.controlGroup}>
-              <label className={styles.fieldLabel}>Label Size</label>
+          <GeneratorPanelBody>
+            <CollapsibleSection
+              title="Label size"
+              expanded={isSectionExpanded("Label size", true)}
+              onExpandedChange={(expanded) => setSectionExpanded("Label size", expanded)}
+            >
               <div className={styles.sizeGrid}>
                 {labelSizes.map((size) => (
                   <button
@@ -2533,69 +2616,193 @@ export function LabelGeneratorApp({ accent }: GridfinityAppProps) {
                   <small>mm</small>
                 </button>
               </div>
-            </div>
 
-            <div className={styles.customSizeGrid}>
+              <div className={styles.customSizeGrid}>
+                <label className={styles.field}>
+                  <span>Width</span>
+                  <div className={styles.inputWrap}>
+                    <input
+                      aria-label="Custom label width"
+                      inputMode="decimal"
+                      max={maxLabelWidthMm}
+                      min={minLabelWidthMm}
+                      onBlur={commitCustomWidth}
+                      onChange={(event) => updateCustomWidth(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          commitCustomWidth();
+                          event.currentTarget.blur();
+                        }
+                      }}
+                      step="1"
+                      type="text"
+                      value={customWidthDraft}
+                    />
+                    <small>mm</small>
+                  </div>
+                </label>
+                <label className={styles.field}>
+                  <span>Height</span>
+                  <div className={styles.inputWrap}>
+                    <input
+                      aria-label="Custom label height"
+                      inputMode="decimal"
+                      max={maxLabelHeightMm}
+                      min={minLabelHeightMm}
+                      onBlur={commitCustomHeight}
+                      onChange={(event) => updateCustomHeight(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          commitCustomHeight();
+                          event.currentTarget.blur();
+                        }
+                      }}
+                      step="1"
+                      type="text"
+                      value={customHeightDraft}
+                    />
+                    <small>mm</small>
+                  </div>
+                </label>
+              </div>
+
+            </CollapsibleSection>
+            <CollapsibleSection
+              title="Printer"
+              expanded={isSectionExpanded("Printer", true)}
+              onExpandedChange={(expanded) => setSectionExpanded("Printer", expanded)}
+            >
               <label className={styles.field}>
-                <span>Width</span>
-                <div className={styles.inputWrap}>
-                  <input
-                    aria-label="Custom label width"
-                    inputMode="decimal"
-                    max={maxLabelWidthMm}
-                    min={minLabelWidthMm}
-                    onBlur={commitCustomWidth}
-                    onChange={(event) => updateCustomWidth(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        commitCustomWidth();
-                        event.currentTarget.blur();
-                      }
-                    }}
-                    step="1"
-                    type="text"
-                    value={customWidthDraft}
-                  />
-                  <small>mm</small>
-                </div>
+                <span>Label printer</span>
+                <select
+                  aria-label="Label printer"
+                  value={printerId}
+                  onChange={(event) => {
+                    const id = event.target.value;
+                    setMarginsMm(appliedMargins);
+                    setUsePrinterMargins(Boolean(getPrinterMargins(id, labelSize.heightMm)));
+                    setPrinterId(id);
+                    const preset = printerPresets.find((printer) => printer.id === id);
+                    const mode = preset?.modes[0] ?? { dpiX: printerDpi, dpiY: printerDpiY };
+                    setPrinterDpi(mode.dpiX);
+                    setPrinterDpiY(mode.dpiY);
+                    setPrinterDpiDraft(String(mode.dpiX));
+                    setPrinterDpiYDraft(String(mode.dpiY));
+                  }}
+                >
+                  {printerPresets.map((printer) => (
+                    <option key={printer.id} value={printer.id}>{printer.name}</option>
+                  ))}
+                  <option value="custom">Other / custom DPI</option>
+                </select>
               </label>
-              <label className={styles.field}>
-                <span>Height</span>
-                <div className={styles.inputWrap}>
-                  <input
-                    aria-label="Custom label height"
-                    inputMode="decimal"
-                    max={maxLabelHeightMm}
-                    min={minLabelHeightMm}
-                    onBlur={commitCustomHeight}
-                    onChange={(event) => updateCustomHeight(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        commitCustomHeight();
-                        event.currentTarget.blur();
-                      }
-                    }}
-                    step="1"
-                    type="text"
-                    value={customHeightDraft}
-                  />
-                  <small>mm</small>
+              {selectedPrinter ? (
+                selectedPrinter.modes.length > 1 ? (
+                  <label className={styles.field}>
+                    <span>Print resolution</span>
+                    <select
+                      aria-label="Print resolution"
+                      value={`${printerDpi}x${printerDpiY}`}
+                      title="Horizontal × vertical DPI; match your printer's quality setting"
+                      onChange={(event) => {
+                        const mode = selectedPrinter.modes.find((mode) => `${mode.dpiX}x${mode.dpiY}` === event.target.value);
+                        if (!mode) return;
+                        setPrinterDpi(mode.dpiX);
+                        setPrinterDpiY(mode.dpiY);
+                      }}
+                    >
+                      {selectedPrinter.modes.map((mode) => (
+                        <option key={`${mode.dpiX}x${mode.dpiY}`} value={`${mode.dpiX}x${mode.dpiY}`}>
+                          {mode.name} · {mode.dpiX} × {mode.dpiY} DPI
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : <p className={styles.printHint}>{printerDpi} × {printerDpiY} DPI</p>
+              ) : (
+                <div className={styles.marginGrid}>
+                  {(["x", "y"] as const).map((axis) => (
+                    <label className={styles.field} key={axis}>
+                      <span>{axis === "x" ? "Horizontal DPI" : "Vertical DPI"}</span>
+                      <input
+                        type="number"
+                        min={minPrinterDpi}
+                        max={maxPrinterDpi}
+                        step="1"
+                        value={axis === "x" ? printerDpiDraft : printerDpiYDraft}
+                        onChange={(event) => updatePrinterDpi(axis, event.target.value)}
+                        onBlur={() => axis === "x" ? setPrinterDpiDraft(String(printerDpi)) : setPrinterDpiYDraft(String(printerDpiY))}
+                        onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
+                      />
+                    </label>
+                  ))}
                 </div>
+              )}
+            </CollapsibleSection>
+            <CollapsibleSection
+              title="Margins"
+              expanded={isSectionExpanded("Margins", true)}
+              onExpandedChange={(expanded) => setSectionExpanded("Margins", expanded)}
+            >
+              <label className={styles.toggleRow}>
+                <span><strong>Use printer margins</strong></span>
+                <input
+                  type="checkbox"
+                  checked={usePrinterMargins && Boolean(presetMargins)}
+                  disabled={!presetMargins}
+                  onChange={(event) => {
+                    setMarginsMm(appliedMargins);
+                    setUsePrinterMargins(event.target.checked);
+                  }}
+                />
               </label>
-            </div>
+              <div className={styles.marginGrid}>
+                {(["horizontal", "vertical"] as const).map((axis) => {
+                  const value = appliedMargins[axis === "horizontal" ? "left" : "top"];
+                  return (
+                    <label className={styles.field} key={axis}>
+                      <span>{axis === "horizontal" ? "Horizontal margin" : "Vertical margin"}</span>
+                      <div className={styles.inputWrap}>
+                        <input
+                          key={`${axis}-${value}`}
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          max={((axis === "horizontal" ? labelSize.widthMm : labelSize.heightMm) - 1) / 2}
+                          title={axis === "horizontal" ? "Each left and right edge" : "Each top and bottom edge"}
+                          defaultValue={Number(value.toFixed(2))}
+                          onBlur={(event) => {
+                            updateMargin(axis, event.target.value);
+                            event.currentTarget.value = String(Number(value.toFixed(2)));
+                          }}
+                          onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
+                        />
+                        <small>mm</small>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+              <p className={styles.printHint} data-testid="printable-area-size">
+                Printable: {Number(printableWidthMm.toFixed(2))} × {Number(printableHeightMm.toFixed(2))} mm
+              </p>
+            </CollapsibleSection>
+          </GeneratorPanelBody>
 
-          </div>
-
-          <div className={styles.panelActions}>
+          <GeneratorPanelActions>
+            {currentPrintRaster?.error ? <p role="alert" className={styles.printHint}>{currentPrintRaster.error}</p> : null}
+            {exportError ? <p role="alert" className={styles.printHint}>{exportError}</p> : null}
             <button
               className={styles.primaryButton}
+              disabled={!hasLoadedStoredSettings || isExporting}
+              aria-busy={isExporting}
               onClick={downloadPng}
               type="button"
             >
               <Download aria-hidden="true" size={16} />
               Download PNG
             </button>
-          </div>
+          </GeneratorPanelActions>
         </GeneratorPanel>
       }
     />

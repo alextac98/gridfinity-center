@@ -13,7 +13,7 @@ type LabelTextLayout = {
 };
 
 // Measure at a fixed reference size so fitting scales identically for screen,
-// zoom, and print. Reserve a small inset for glyph overhang and rounding.
+// zoom, and print. Fit visible glyphs rather than the font's empty line spacing.
 export function getLabelTextLayout(
   context: CanvasRenderingContext2D,
   primary: string,
@@ -32,28 +32,35 @@ export function getLabelTextLayout(
       metrics.width,
       metrics.actualBoundingBoxLeft + metrics.actualBoundingBoxRight,
     );
+    const inkAscent = metrics.actualBoundingBoxAscent;
+    const inkDescent = metrics.actualBoundingBoxDescent;
+    const inkHeight = Math.max(1, inkAscent + inkDescent);
     const fontSize = text ? Math.min(
       (width - inset * 2) * 100 / Math.max(measuredWidth, 1),
-      allocatedHeight / 1.15,
+      allocatedHeight * 100 / inkHeight,
     ) : 0;
-    const lineHeight = fontSize * 1.15;
+    const lineHeight = inkHeight * fontSize / 100;
     const ascent = metrics.fontBoundingBoxAscent * fontSize / 100;
     const descent = metrics.fontBoundingBoxDescent * fontSize / 100;
+    const baseline = inkAscent * fontSize / 100;
     return {
       fontSize,
       height: lineHeight,
-      top: 0,
-      baseline: (lineHeight - ascent - descent) / 2 + ascent,
+      // CSS centers the font box inside line-height. Offset that box so the
+      // visible letters align with the same baseline used by the PNG renderer.
+      top: baseline - ((lineHeight - ascent - descent) / 2 + ascent),
+      baseline,
     };
   }
 
   const primaryLine = fit(primary, 800, availableHeight * (secondary ? 0.7 : 1));
   const secondaryLine = fit(secondary, 500, availableHeight * (primary ? 0.3 : 1));
   const start = (height - primaryLine.height - secondaryLine.height - gap) / 2;
-  primaryLine.top = start;
+  primaryLine.top += start;
   primaryLine.baseline += start;
-  secondaryLine.top = start + primaryLine.height + gap;
-  secondaryLine.baseline += secondaryLine.top;
+  const secondaryStart = start + primaryLine.height + gap;
+  secondaryLine.top += secondaryStart;
+  secondaryLine.baseline += secondaryStart;
 
   return { primary: primaryLine, secondary: secondaryLine };
 }

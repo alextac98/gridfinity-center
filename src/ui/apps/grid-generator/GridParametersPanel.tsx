@@ -1,11 +1,17 @@
 "use client";
 
+import {
+  CollapsibleSection,
+  GeneratorPanel,
+  GeneratorPanelActions,
+  GeneratorPanelBody,
+} from "@/ui/components/ui/GeneratorSidebar";
+
 import { Play, RotateCcw, SlidersHorizontal } from "lucide-react";
 import type { Dispatch, SetStateAction } from "react";
 import {
   AlignmentGridPicker,
   BooleanField,
-  CollapsibleSection,
   NumberInputField,
   SelectField,
   TupleField,
@@ -556,207 +562,204 @@ export function GridParametersPanel({
   };
 
   return (
-    <section className={styles.panel} aria-label="Grid Parameters">
-      <div className={styles.panelHeader}>
-        <SlidersHorizontal aria-hidden="true" size={18} />
-        <h2>Grid Parameters</h2>
-      </div>
+    <GeneratorPanel
+      ariaLabel="Grid Parameters"
+      title="Grid Parameters"
+      icon={<SlidersHorizontal aria-hidden="true" size={18} />}
+    >
+      <GeneratorPanelBody>
+        <CollapsibleSection title="Size" columns>
+          {renderNumberField("widthUnits")}
+          {renderNumberField("depthUnits")}
+          {renderSizeUnitSwitch()}
+          <AlignmentGridPicker
+            label="Grid Alignment"
+            x={params.positionFillGridX}
+            y={params.positionFillGridY}
+            xEnabled={hasWidthExtraSpace}
+            yEnabled={hasDepthExtraSpace}
+            onChange={updateGridAlignment}
+          />
+          <SelectField
+            label="Grid Style"
+            value={params.plateStyle}
+            options={plateStyleOptions}
+            fullWidth
+            onChange={(plateStyle) =>
+              updateParams((current) => ({ ...current, plateStyle }))
+            }
+          />
+          <SelectField
+            label="Fill Mode"
+            value={params.fillMode}
+            options={fillModeOptions}
+            fullWidth
+            onChange={updateFillMode}
+          />
+          {showSolidSizeFields ? (
+            <>
+              {renderNumberField("outerWidthUnits")}
+              {renderNumberField("outerDepthUnits")}
+              {renderSolidUnitSwitch()}
+            </>
+          ) : null}
+          {showSolidHeightField
+            ? renderNumberField("outerHeightMm", false, true)
+            : null}
+        </CollapsibleSection>
 
-      <div className={styles.panelScroll}>
-        <div className={styles.formShell}>
-          <CollapsibleSection title="Size" columns>
-            {renderNumberField("widthUnits")}
-            {renderNumberField("depthUnits")}
-            {renderSizeUnitSwitch()}
-            <AlignmentGridPicker
-              label="Grid Alignment"
-              x={params.positionFillGridX}
-              y={params.positionFillGridY}
-              xEnabled={hasWidthExtraSpace}
-              yEnabled={hasDepthExtraSpace}
-              onChange={updateGridAlignment}
-            />
-            <SelectField
-              label="Grid Style"
-              value={params.plateStyle}
-              options={plateStyleOptions}
-              fullWidth
-              onChange={(plateStyle) =>
-                updateParams((current) => ({ ...current, plateStyle }))
-              }
-            />
-            <SelectField
-              label="Fill Mode"
-              value={params.fillMode}
-              options={fillModeOptions}
-              fullWidth
-              onChange={updateFillMode}
-            />
-            {showSolidSizeFields ? (
-              <>
-                {renderNumberField("outerWidthUnits")}
-                {renderNumberField("outerDepthUnits")}
-                {renderSolidUnitSwitch()}
-              </>
-            ) : null}
-            {showSolidHeightField
-              ? renderNumberField("outerHeightMm", false, true)
-              : null}
-          </CollapsibleSection>
+        <CollapsibleSection title="Magnets & Screws" columns defaultCollapsed>
+          <BooleanField
+            label="Corner Magnets"
+            checked={params.magnets}
+            fullWidth
+            onChange={(magnets) =>
+              updateParams((current) => ({ ...current, magnets }))
+            }
+          />
+          <TupleField
+            label="Magnet Size"
+            value={params.magnetSize}
+            labels={["Diameter", "Height"]}
+            suffix="mm"
+            disabled={magnetsDisabled}
+            onChange={(index, value) =>
+              updateParams((current) => {
+                const magnetSize = [...current.magnetSize] as [number, number];
+                magnetSize[index] = Number.isFinite(value) ? value : 0;
 
-          <CollapsibleSection title="Magnets & Screws" columns defaultCollapsed>
-            <BooleanField
-              label="Corner Magnets"
-              checked={params.magnets}
-              fullWidth
-              onChange={(magnets) =>
-                updateParams((current) => ({ ...current, magnets }))
-              }
-            />
-            <TupleField
-              label="Magnet Size"
-              value={params.magnetSize}
-              labels={["Diameter", "Height"]}
-              suffix="mm"
-              disabled={magnetsDisabled}
-              onChange={(index, value) =>
-                updateParams((current) => {
-                  const magnetSize = [...current.magnetSize] as [number, number];
-                  magnetSize[index] = Number.isFinite(value) ? value : 0;
+                return { ...current, magnetSize };
+              })
+            }
+          />
+          {renderNumberField("magnetZOffsetMm", magnetsDisabled)}
+          {renderNumberField("magnetTopCoverMm", magnetsDisabled)}
+          <SelectField
+            label="Magnet Release"
+            value={params.magnetReleaseMethod}
+            options={magnetReleaseOptions}
+            disabled={magnetsDisabled}
+            fullWidth
+            onChange={(magnetReleaseMethod) =>
+              updateParams((current) => ({ ...current, magnetReleaseMethod }))
+            }
+          />
+          <BooleanField
+            label="Corner Screws"
+            checked={params.cornerScrews}
+            onChange={(cornerScrews) =>
+              updateParams((current) => ({ ...current, cornerScrews }))
+            }
+          />
+          <BooleanField
+            label="Center Screw"
+            checked={params.centerScrew}
+            onChange={(centerScrew) =>
+              updateParams((current) => ({ ...current, centerScrew }))
+            }
+          />
+          <BooleanField
+            label="Weight Cavities"
+            checked={params.weightCavities}
+            fullWidth
+            onChange={(weightCavities) =>
+              updateParams((current) => ({ ...current, weightCavities }))
+            }
+          />
+        </CollapsibleSection>
 
-                  return { ...current, magnetSize };
-                })
-              }
-            />
-            {renderNumberField("magnetZOffsetMm", magnetsDisabled)}
-            {renderNumberField("magnetTopCoverMm", magnetsDisabled)}
+        <CollapsibleSection title="Connectors" columns defaultCollapsed>
+          <SelectField
+            label="Connector"
+            value={connectorMode}
+            options={connectorModeOptions}
+            fullWidth
+            onChange={(mode) =>
+              updateParams((current) => ({
+                ...current,
+                connectorClipEnabled: mode === "clip",
+                connectorOnly: mode === "clip" ? current.connectorOnly : false,
+                connectorSnapsStyle:
+                  mode === "snap"
+                    ? current.connectorSnapsStyle === "disabled"
+                      ? "larger"
+                      : current.connectorSnapsStyle
+                    : "disabled",
+              }))
+            }
+          />
+          {connectorMode === "clip" || connectorMode === "snap" ? (
             <SelectField
-              label="Magnet Release"
-              value={params.magnetReleaseMethod}
-              options={magnetReleaseOptions}
-              disabled={magnetsDisabled}
+              label="Connector Position"
+              value={params.connectorPosition}
+              options={connectorPositionOptions}
               fullWidth
-              onChange={(magnetReleaseMethod) =>
-                updateParams((current) => ({ ...current, magnetReleaseMethod }))
+              onChange={(connectorPosition) =>
+                updateParams((current) => ({ ...current, connectorPosition }))
               }
             />
-            <BooleanField
-              label="Corner Screws"
-              checked={params.cornerScrews}
-              onChange={(cornerScrews) =>
-                updateParams((current) => ({ ...current, cornerScrews }))
-              }
-            />
-            <BooleanField
-              label="Center Screw"
-              checked={params.centerScrew}
-              onChange={(centerScrew) =>
-                updateParams((current) => ({ ...current, centerScrew }))
-              }
-            />
-            <BooleanField
-              label="Weight Cavities"
-              checked={params.weightCavities}
-              fullWidth
-              onChange={(weightCavities) =>
-                updateParams((current) => ({ ...current, weightCavities }))
-              }
-            />
-          </CollapsibleSection>
-
-          <CollapsibleSection title="Connectors" columns defaultCollapsed>
-            <SelectField
-              label="Connector"
-              value={connectorMode}
-              options={connectorModeOptions}
-              fullWidth
-              onChange={(mode) =>
-                updateParams((current) => ({
-                  ...current,
-                  connectorClipEnabled: mode === "clip",
-                  connectorOnly: mode === "clip" ? current.connectorOnly : false,
-                  connectorSnapsStyle:
-                    mode === "snap"
-                      ? current.connectorSnapsStyle === "disabled"
-                        ? "larger"
-                        : current.connectorSnapsStyle
-                      : "disabled",
-                }))
-              }
-            />
-            {connectorMode === "clip" || connectorMode === "snap" ? (
+          ) : null}
+          {connectorMode === "clip" ? (
+            <>
+              {renderNumberField(
+                "connectorClipSizeMm",
+                !params.connectorClipEnabled,
+              )}
+              {renderNumberField(
+                "connectorClipToleranceMm",
+                !params.connectorClipEnabled,
+              )}
+              {renderConnectorOutputSwitch()}
+            </>
+          ) : null}
+          {connectorMode === "snap" ? (
+            <>
               <SelectField
-                label="Connector Position"
-                value={params.connectorPosition}
-                options={connectorPositionOptions}
+                label="Snap Connector"
+                value={
+                  params.connectorSnapsStyle === "disabled"
+                    ? "larger"
+                    : params.connectorSnapsStyle
+                }
+                options={connectorSnapsOptions}
                 fullWidth
-                onChange={(connectorPosition) =>
-                  updateParams((current) => ({ ...current, connectorPosition }))
+                onChange={(connectorSnapsStyle) =>
+                  updateParams((current) => ({
+                    ...current,
+                    connectorSnapsStyle,
+                  }))
                 }
               />
-            ) : null}
-            {connectorMode === "clip" ? (
-              <>
-                {renderNumberField(
-                  "connectorClipSizeMm",
-                  !params.connectorClipEnabled,
-                )}
-                {renderNumberField(
-                  "connectorClipToleranceMm",
-                  !params.connectorClipEnabled,
-                )}
-                {renderConnectorOutputSwitch()}
-              </>
-            ) : null}
-            {connectorMode === "snap" ? (
-              <>
-                <SelectField
-                  label="Snap Connector"
-                  value={
-                    params.connectorSnapsStyle === "disabled"
-                      ? "larger"
-                      : params.connectorSnapsStyle
-                  }
-                  options={connectorSnapsOptions}
-                  fullWidth
-                  onChange={(connectorSnapsStyle) =>
-                    updateParams((current) => ({
-                      ...current,
-                      connectorSnapsStyle,
-                    }))
-                  }
-                />
-                {renderNumberField(
-                  "connectorSnapsClearanceMm",
-                  connectorSnapsDisabled,
-                )}
-              </>
-            ) : null}
-          </CollapsibleSection>
+              {renderNumberField(
+                "connectorSnapsClearanceMm",
+                connectorSnapsDisabled,
+              )}
+            </>
+          ) : null}
+        </CollapsibleSection>
 
-          <CollapsibleSection title="Frame" columns defaultCollapsed>
-            {renderReducedWallHeightField()}
-            {renderNumberField("plateCornerRadiusMm")}
-            {renderNumberField("secondaryCornerRadiusMm")}
-            <BooleanField
-              label="Reduced Wall Taper"
-              checked={params.reducedWallTaper}
-              onChange={(reducedWallTaper) =>
-                updateParams((current) => ({ ...current, reducedWallTaper }))
-              }
-            />
-            <BooleanField
-              label="Remove Bottom Taper"
-              checked={params.removeBottomTaper}
-              onChange={(removeBottomTaper) =>
-                updateParams((current) => ({ ...current, removeBottomTaper }))
-              }
-            />
-          </CollapsibleSection>
-        </div>
-      </div>
+        <CollapsibleSection title="Frame" columns defaultCollapsed>
+          {renderReducedWallHeightField()}
+          {renderNumberField("plateCornerRadiusMm")}
+          {renderNumberField("secondaryCornerRadiusMm")}
+          <BooleanField
+            label="Reduced Wall Taper"
+            checked={params.reducedWallTaper}
+            onChange={(reducedWallTaper) =>
+              updateParams((current) => ({ ...current, reducedWallTaper }))
+            }
+          />
+          <BooleanField
+            label="Remove Bottom Taper"
+            checked={params.removeBottomTaper}
+            onChange={(removeBottomTaper) =>
+              updateParams((current) => ({ ...current, removeBottomTaper }))
+            }
+          />
+        </CollapsibleSection>
+      </GeneratorPanelBody>
 
-      <div className={styles.panelActions}>
+      <GeneratorPanelActions>
         <div className={styles.actionRow}>
           <button
             className={styles.generateButton}
@@ -777,7 +780,7 @@ export function GridParametersPanel({
             <RotateCcw aria-hidden="true" size={16} />
           </button>
         </div>
-      </div>
-    </section>
+      </GeneratorPanelActions>
+    </GeneratorPanel>
   );
 }

@@ -38,8 +38,9 @@ Local adaptations: separate the face and side projections, rotate nut/washer
 side views to match the existing horizontal slots, trim empty margins, remove
 hidden edges and centerlines from face views, suppress hidden edges coincident
 with visible edges, simplify sampled polylines within 0.002 source mm, and use
-black strokes with heavier outlines for label legibility. Side-view margins
-are 0.4 source mm, just larger than half the 0.65 mm outline stroke, to avoid
+black strokes with heavier outlines for label legibility. Visible, hidden, and center strokes are 1.05, 0.7, and 0.6 source mm
+respectively, to improve small thermal-label legibility. Side-view margins
+are 0.6 source mm, just larger than half the outline stroke, to avoid
 wasting label space while keeping the strokes unclipped. Compact picker
 thumbnails crop the shaft; full label drawings preserve their aspect ratio.
 

@@ -128,7 +128,7 @@ export function getDriveSvgMarkup(id: DriveId) {
   // depict. Torx retains the existing CC0 geometry (see SOURCES.md).
   let recess: string;
   if (id === "torx") {
-    recess = `<path d="m200 350c-38-1-18-43-51-62s-61 20-80-13 28-37 29-75-48-42-29-75 47 6 80-13 13-63 51-62 18 43 51 62 61-20 80 13-28 37-29 75 48 42 29 75-47-6-80 13-13 63-51 62z" transform="translate(10 10) scale(.2)" stroke-width="16"/>`;
+    recess = `<path d="m200 350c-38-1-18-43-51-62s-61 20-80-13 28-37 29-75-48-42-29-75 47 6 80-13 13-63 51-62 18 43 51 62 61-20 80 13-28 37-29 75 48 42 29 75-47-6-80 13-13 63-51 62z" transform="translate(10 10) scale(.2)" stroke-width="26"/>`;
   } else if (id === "square") {
     recess = `<rect x="31" y="31" width="38" height="38" transform="rotate(45 50 50)"/>`;
   } else {
@@ -136,12 +136,12 @@ export function getDriveSvgMarkup(id: DriveId) {
     return svgMarkup(
       cadArtwork.iso7045.top.viewBox,
       cadArtwork.iso7045.top.body +
-        `<path d="M-4.6,-4.6 -6.3,-6.3 M4.6,-4.6 6.3,-6.3 M4.6,4.6 6.3,6.3 M-4.6,4.6 -6.3,6.3" fill="none" stroke="black" stroke-width=".5"/>`,
+        `<path d="M-4.6,-4.6 -6.3,-6.3 M4.6,-4.6 6.3,-6.3 M4.6,4.6 6.3,6.3 M-4.6,4.6 -6.3,6.3" fill="none" stroke="black" stroke-width=".8"/>`,
     );
   }
   return svgMarkup(
     "0 0 100 100",
-    `<g fill="none" stroke="black" stroke-width="3.2" stroke-linejoin="round"><circle cx="50" cy="50" r="44"/>${recess}</g>`,
+    `<g fill="none" stroke="black" stroke-width="5.2" stroke-linejoin="round"><circle cx="50" cy="50" r="44"/>${recess}</g>`,
   );
 }
 
