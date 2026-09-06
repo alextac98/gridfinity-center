@@ -232,8 +232,12 @@ test("keeps printer controls clickable on a narrow screen", async ({ page }) => 
 test("keeps artwork proportions on the rectangular printer dot grid", async ({ page }) => {
   await page.goto("/label-generator");
   await expectRasterSize(page, 496, 85);
-  const inspect = () => page.getByTestId("label-printer-preview").evaluate(async (element) => {
-    const image = element as HTMLImageElement;
+  const inspect = (source?: string) => page.getByTestId("label-printer-preview").evaluate(async (element, source) => {
+    const image = source ? new Image() : element as HTMLImageElement;
+    if (source) {
+      image.src = source;
+      await image.decode();
+    }
     const bytes = new Uint8Array(await (await fetch(image.src)).arrayBuffer());
     const view = new DataView(bytes.buffer);
     let density: number[] = [];
@@ -248,7 +252,7 @@ test("keeps artwork proportions on the rectangular printer dot grid", async ({ p
     const context = canvas.getContext("2d")!;
     context.drawImage(image, 0, 0);
     const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
-    const label = image.parentElement!;
+    const label = element.parentElement!;
     const rect = label.getBoundingClientRect();
     const bounds = [
       '[data-artwork-profile="top"]', '[data-artwork-profile="side"]',
@@ -261,6 +265,9 @@ test("keeps artwork proportions on the rectangular printer dot grid", async ({ p
       const bottom = Math.ceil((slot.bottom - rect.top) / rect.height * canvas.height);
       let minX = canvas.width, minY = canvas.height, maxX = -1, maxY = -1;
       for (let y = top; y < bottom; y++) for (let x = left; x < right; x++) {
+        // The thin centerline may disappear at low DPI. Compare the bolt body
+        // rather than counting its protruding centerline as part of its width.
+        if (selector === '[data-artwork-profile="side"]' && Math.abs(y + 0.5 - (top + bottom) / 2) <= 1) continue;
         if (pixels[(y * canvas.width + x) * 4] === 0) {
           minX = Math.min(minX, x); maxX = Math.max(maxX, x);
           minY = Math.min(minY, y); maxY = Math.max(maxY, y);
@@ -269,7 +276,7 @@ test("keeps artwork proportions on the rectangular printer dot grid", async ({ p
       return [minX / canvas.width, minY / canvas.height, (maxX - minX + 1) / canvas.width, (maxY - minY + 1) / canvas.height];
     });
     return { density, bounds, ratio: rect.width / rect.height };
-  });
+  }, source);
   const high = await inspect();
   expect(high.density).toEqual([14173, 7087]);
   expect(high.ratio).toBeCloseTo(35 / 12, 2);
@@ -284,7 +291,23 @@ test("keeps artwork proportions on the rectangular printer dot grid", async ({ p
   expect(standard.density).toEqual([7087, 7087]);
   for (let region = 0; region < high.bounds.length; region++) {
     for (let coordinate = 0; coordinate < 4; coordinate++) {
-      expect(Math.abs(high.bounds[region][coordinate] - standard.bounds[region][coordinate])).toBeLessThan(0.025);
+      expect(Math.abs(high.bounds[region][coordinate] - standard.bounds[region][coordinate]),
+        `region ${region}, coordinate ${coordinate}: high ${high.bounds[region]}, standard ${standard.bounds[region]}`,
+      ).toBeLessThan(0.025);
+    }
+  }
+  await page.getByLabel("Label printer", { exact: true }).selectOption("custom");
+  await page.getByLabel("Vertical DPI").fill("360");
+  await page.getByLabel("Vertical DPI").blur();
+  await expectRasterSize(page, 248, 170);
+  const vertical = await inspect();
+  expect(vertical.density).toEqual([7087, 14173]);
+  const exported = await inspect(`data:image/png;base64,${(await downloadPng(page)).toString("base64")}`);
+  expect(exported.density).toEqual([47244, 47244]);
+  for (const result of [vertical, exported]) {
+    for (const index of [0, 3]) {
+      const box = result.bounds[index];
+      expect(box[2] * 35 / (box[3] * 12)).toBeCloseTo(1, 1);
     }
   }
 });

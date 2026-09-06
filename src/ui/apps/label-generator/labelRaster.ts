@@ -84,27 +84,26 @@ export function renderLabelExportPng(options: Omit<LabelRasterOptions, "resoluti
 
 async function renderLabelRaster(options: LabelRasterOptions, monochrome: boolean): Promise<Blob> {
   const { width, height } = getPrinterPixelSize(options.widthMm, options.heightMm, options.resolution);
+  // Firefox distorts SVG images drawn under a nonuniform canvas transform.
+  // Composite at the finer printer resolution with square pixels first, then
+  // resample the finished bitmap onto the printer's rectangular dot grid.
+  const renderDpi = Math.max(options.resolution.dpiX, options.resolution.dpiY);
+  const renderSize = getPrinterPixelSize(options.widthMm, options.heightMm, { dpiX: renderDpi, dpiY: renderDpi });
   const [top, side, qr] = await Promise.all([
     loadImage(options.showPrimary ? options.topSource : ""),
     loadImage(options.showSecondary ? options.sideSource : ""),
     loadImage(options.showQr ? options.qrSource : ""),
   ]);
   const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = renderSize.width;
+  canvas.height = renderSize.height;
   const context = canvas.getContext("2d", { willReadFrequently: monochrome });
   if (!context) throw new Error("Your browser could not create a print preview.");
   context.fillStyle = "#ffffff";
-  context.fillRect(0, 0, width, height);
-  // Lay out in square-pixel coordinates, then map onto the printer's dot grid.
-  // Using the anisotropic bitmap dimensions for layout would squash circles,
-  // text and QR codes when the bitmap is displayed at the label's physical size.
-  const layoutWidth = options.resolution.dpiX === options.resolution.dpiY
-    ? width : height * options.widthMm / options.heightMm;
-  context.scale(width / layoutWidth, 1);
+  context.fillRect(0, 0, canvas.width, canvas.height);
   const layout = getLabelLayout(
-    layoutWidth, height, options.showPrimary, options.showSecondary, options.showQr,
-    scaleLabelMargins(options.marginsMm, layoutWidth / options.widthMm, height / options.heightMm),
+    canvas.width, canvas.height, options.showPrimary, options.showSecondary, options.showQr,
+    scaleLabelMargins(options.marginsMm, canvas.width / options.widthMm, canvas.height / options.heightMm),
   );
   if (top) drawContained(context, top, layout.primaryLeft, layout.top, layout.edgeSize, layout.edgeSize);
 
@@ -123,17 +122,29 @@ async function renderLabelRaster(options: LabelRasterOptions, monochrome: boolea
   if (side) drawContained(context, side, layout.contentLeft, layout.sideTop, layout.contentWidth, layout.sideHeight);
   if (qr) context.drawImage(qr, layout.qrLeft, layout.qrTop, layout.qrSize, layout.qrSize);
 
+  let outputCanvas = canvas;
+  let outputContext = context;
+  if (canvas.width !== width || canvas.height !== height) {
+    outputCanvas = document.createElement("canvas");
+    outputCanvas.width = width;
+    outputCanvas.height = height;
+    const printerContext = outputCanvas.getContext("2d", { willReadFrequently: monochrome });
+    if (!printerContext) throw new Error("Your browser could not create a print preview.");
+    printerContext.drawImage(canvas, 0, 0, width, height);
+    outputContext = printerContext;
+  }
+
   // Thermal printers place black dots, not antialiased gray pixels. Threshold
   // only after compositing everything onto white, including uploaded artwork.
   if (monochrome) {
-    const pixels = context.getImageData(0, 0, width, height);
+    const pixels = outputContext.getImageData(0, 0, width, height);
     for (let i = 0; i < pixels.data.length; i += 4) {
       const luminance = pixels.data[i] * 0.2126 + pixels.data[i + 1] * 0.7152 + pixels.data[i + 2] * 0.0722;
       const value = luminance < 128 ? 0 : 255;
       pixels.data[i] = pixels.data[i + 1] = pixels.data[i + 2] = value;
       pixels.data[i + 3] = 255;
     }
-    context.putImageData(pixels, 0, 0);
+    outputContext.putImageData(pixels, 0, 0);
   }
-  return pngAtDpi(canvas, options.resolution);
+  return pngAtDpi(outputCanvas, options.resolution);
 }
