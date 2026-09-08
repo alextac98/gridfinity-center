@@ -2,8 +2,10 @@ import type { NextConfig } from "next";
 import { execSync } from "node:child_process";
 
 function getCommitSha() {
-  if (process.env.VERCEL_GIT_COMMIT_SHA) {
-    return process.env.VERCEL_GIT_COMMIT_SHA;
+  const fromEnv =
+    process.env.GRIDFINITY_COMMIT_SHA || process.env.VERCEL_GIT_COMMIT_SHA;
+  if (fromEnv) {
+    return fromEnv;
   }
 
   try {
@@ -14,6 +16,8 @@ function getCommitSha() {
 }
 
 const nextConfig: NextConfig = {
+  // Standalone output is only needed for the Docker image; it makes `next start` warn.
+  output: process.env.NEXT_OUTPUT_STANDALONE === "1" ? "standalone" : undefined,
   env: {
     NEXT_PUBLIC_GRIDFINITY_COMMIT_SHA: getCommitSha(),
   },

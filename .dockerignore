@@ -3,5 +3,9 @@
 .pnpm-store
 node_modules
 test-results
+playwright-report
 *.log
 .DS_Store
+.env*
+Dockerfile
+docker-compose*.yml

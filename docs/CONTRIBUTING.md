@@ -70,6 +70,29 @@ docker build -f render-service/Dockerfile -t gridfinity-render-service .
 docker run --rm -p 8080:8080 -e RENDER_AUTH_TOKEN=dev-secret gridfinity-render-service
 ```
 
+## Docker
+
+The root `Dockerfile` builds the Next.js app as a standalone production image. Pass the commit SHA explicitly, since `.git` is excluded from the build context:
+
+```bash
+docker build --build-arg GRIDFINITY_COMMIT_SHA="$(git rev-parse HEAD)" -t gridfinity-center .
+docker run --rm -p 3000:3000 \
+  -e NATIVE_RENDER_URL=http://host.docker.internal:8080 \
+  -e NATIVE_RENDER_TOKEN=dev-secret \
+  --add-host=host.docker.internal:host-gateway \
+  gridfinity-center
+```
+
+`NEXT_PUBLIC_*` values are inlined at build time, so pass `NEXT_PUBLIC_POSTHOG_KEY` as a build arg rather than a runtime variable.
+
+To run the app and the render service together for local testing:
+
+```bash
+GRIDFINITY_COMMIT_SHA="$(git rev-parse HEAD)" docker compose up --build
+```
+
+The app is served on [http://localhost:3000](http://localhost:3000). The render service is only reachable from the web container. Set `WEB_PORT` to publish the app on a different host port, and export the `R2_*` variables to exercise the R2 cache. The compose file is for testing only, not deployment.
+
 ## Common Commands
 
 ```bash

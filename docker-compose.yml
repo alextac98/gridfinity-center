@@ -1,0 +1,50 @@
+# Local end-to-end stack for testing: the Next.js app plus the native OpenSCAD
+# render service. Not a production deployment (that targets Kubernetes).
+#
+#   docker compose up --build
+#   open http://localhost:3000
+#
+# Set WEB_PORT to publish the app on a different host port. The render
+# service is only reachable from the web container over the compose network.
+#
+# Optional: export R2_* variables to exercise the Cloudflare R2 model cache.
+
+services:
+  web:
+    build:
+      context: .
+      args:
+        GRIDFINITY_COMMIT_SHA: "${GRIDFINITY_COMMIT_SHA:-}"
+        NEXT_PUBLIC_POSTHOG_KEY: "${NEXT_PUBLIC_POSTHOG_KEY:-}"
+    environment:
+      NATIVE_RENDER_URL: http://render-service:8080
+      NATIVE_RENDER_TOKEN: "${RENDER_AUTH_TOKEN:-dev-secret}"
+      R2_ACCOUNT_ID: "${R2_ACCOUNT_ID:-}"
+      R2_ACCESS_KEY_ID: "${R2_ACCESS_KEY_ID:-}"
+      R2_SECRET_ACCESS_KEY: "${R2_SECRET_ACCESS_KEY:-}"
+      R2_BUCKET_NAME: "${R2_BUCKET_NAME:-}"
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    depends_on:
+      render-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  render-service:
+    build:
+      context: .
+      dockerfile: render-service/Dockerfile
+    environment:
+      RENDER_AUTH_TOKEN: "${RENDER_AUTH_TOKEN:-dev-secret}"
+      RENDER_MAX_CONCURRENCY: "${RENDER_MAX_CONCURRENCY:-1}"
+      RENDER_MAX_QUEUE_LENGTH: "${RENDER_MAX_QUEUE_LENGTH:-10}"
+      RENDER_TIMEOUT_MS: "${RENDER_TIMEOUT_MS:-120000}"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
