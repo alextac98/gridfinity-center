@@ -1,5 +1,6 @@
 import type { OpenScadDefineValue } from "@/shared/openscad-defines";
 import { createHash } from "crypto";
+import { getR2PublicBaseUrl } from "@/server/r2/signing";
 import { gridfinityBaseplateCacheDefinition } from "./baseplateCache";
 import { gridfinityBinCacheDefinition } from "./binCache";
 
@@ -57,4 +58,13 @@ export function isValidModelObjectKey(
 
 export function createCachedObjectApiUrl(modelId: string, objectKey: string) {
   return `/api/openscad-models/${modelId}/r2-cache/object?key=${encodeURIComponent(objectKey)}`;
+}
+
+// Prefer the public R2 URL so cached models are served by Cloudflare's CDN instead of this app.
+export function createModelDownloadUrl(modelId: string, objectKey: string) {
+  const publicBaseUrl = getR2PublicBaseUrl();
+
+  return publicBaseUrl
+    ? `${publicBaseUrl}/${objectKey}`
+    : createCachedObjectApiUrl(modelId, objectKey);
 }

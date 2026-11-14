@@ -44,7 +44,7 @@ type RenderTiming = {
 
 type PreviewTiming = RenderTiming & {
   cacheStatus: string;
-  renderSource: "openscad_render" | "native_openscad" | "r2_cache";
+  renderSource: "openscad_render" | "native_openscad" | "r2_cache" | "server_wasm";
   stl: Uint8Array;
 };
 
@@ -61,14 +61,6 @@ function downloadBlob(name: string, blob: Blob) {
   link.download = name;
   link.click();
   URL.revokeObjectURL(url);
-}
-
-function downloadUrl(name: string, url: string) {
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = name;
-  link.rel = "noopener";
-  link.click();
 }
 
 function writeOpenScadErrorToConsole(message: string, logs: string[]) {
@@ -104,13 +96,26 @@ async function fetchModel<TParams>(
     );
   }
 
+  // Cache hits may redirect to the public R2 URL, which doesn't carry our headers.
+  if (response.redirected) {
+    return {
+      cacheStatus: "hit",
+      modelUrl: response.url,
+      renderSource: "r2_cache",
+      unavailable: false as const,
+      stl: new Uint8Array(await response.arrayBuffer()),
+    };
+  }
+
   const renderSource = response.headers.get("X-Render-Source");
 
   return {
     cacheStatus: response.headers.get("X-Model-Cache-Status") ?? "none",
     modelUrl: response.headers.get("X-Model-Url") ?? "",
     renderSource:
-      renderSource === "r2_cache" ? "r2_cache" : "native_openscad",
+      renderSource === "r2_cache" || renderSource === "server_wasm"
+        ? renderSource
+        : "native_openscad",
     unavailable: false as const,
     stl: new Uint8Array(await response.arrayBuffer()),
   };
@@ -466,11 +471,7 @@ export function useOpenScadModel<TParams>({
       return;
     }
 
-    if (cachedDownloadUrl && cachedDownloadParamsKey === currentParamsKey) {
-      downloadUrl(`${outputBaseName}.stl`, cachedDownloadUrl);
-      return;
-    }
-
+    // Use the bytes already in memory: cross-origin cache URLs ignore the download filename.
     downloadBlob(
       `${outputBaseName}.stl`,
       new Blob([toArrayBuffer(stl)], { type: "model/stl" }),

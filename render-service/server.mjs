@@ -240,6 +240,7 @@ async function renderOpenScad(request) {
       openScadBin,
       [
         ...(enableTextMetrics ? ["--enable=textmetrics"] : []),
+        "--export-format=binstl",
         ...defineArgs,
         inputPath,
         "-o",

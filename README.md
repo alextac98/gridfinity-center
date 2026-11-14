@@ -10,7 +10,7 @@ Gridfinity Center is a browser-based workspace for generating Gridfinity bins, g
 
 ## How It Works
 
-Gridfinity Center uses bundled OpenSCAD models to generate STL models from the parameters you choose in the UI. For fast full model generation, the app defaults to using a native OpenSCAD render service, but will fall back to a WebAssembly version of OpenSCAD running in the browser if the render service is unavailable.
+Gridfinity Center uses bundled OpenSCAD models to generate STL models from the parameters you choose in the UI. Models are rendered on the server with the official OpenSCAD WebAssembly build and cached in Cloudflare R2. If the server can't render, the same WebAssembly build runs in your browser instead.
 
 ## Interested In Contributing?
 

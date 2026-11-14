@@ -32,7 +32,7 @@ pnpm install
 
 ## Local UI Development
 
-Run the app with browser OpenSCAD WASM only:
+Run the app with browser OpenSCAD WASM only (the default `pnpm dev` renders on the server with WASM):
 
 ```bash
 NATIVE_RENDER_DISABLED=1 pnpm dev
@@ -44,7 +44,9 @@ This is the simplest mode for UI work. It exercises the app shell, generators, p
 
 ## Local Backend Development
 
-Run the native render service:
+`pnpm dev` renders models on the server with OpenSCAD WASM; no extra service is needed.
+
+To test the optional native render service instead, run it:
 
 ```bash
 RENDER_AUTH_TOKEN=dev-secret pnpm render-service:dev
@@ -114,7 +116,7 @@ Use `pnpm test:e2e` for browser-level regression coverage. Use `pnpm test:e2e:ui
 - `src/ui/shell/appRegistry.ts` is the source of truth for tools shown in the shell.
 - `src/server/` owns server-only code used by API routes.
 - `src/shared/` contains code safe to import from both server and browser code.
-- `render-service/` contains the standalone native OpenSCAD render service.
+- `render-service/` contains the optional standalone native OpenSCAD render service.
 - `tests/e2e/` contains Playwright tests.
 
 ## Adding Or Changing A Tool
@@ -125,7 +127,7 @@ For OpenSCAD-backed generators, keep parameter normalization, browser defines, s
 
 ## Environment Variables
 
-Native rendering:
+Server rendering (unset uses in-process WASM; `NATIVE_RENDER_DISABLED=1` forces browser rendering):
 
 ```bash
 NATIVE_RENDER_URL=http://localhost:8080
@@ -151,4 +153,6 @@ R2_ACCOUNT_ID=
 R2_ACCESS_KEY_ID=
 R2_SECRET_ACCESS_KEY=
 R2_BUCKET_NAME=
+# Optional public custom domain for serving cache hits from the CDN; see ARCHITECTURE.md.
+R2_PUBLIC_BASE_URL=
 ```

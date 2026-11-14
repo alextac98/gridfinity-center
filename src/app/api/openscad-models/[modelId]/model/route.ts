@@ -47,6 +47,11 @@ export async function POST(request: Request, context: RouteContext) {
       params: body.params,
     });
 
+    if (!result.stl) {
+      // Cache hit on the public R2 URL; let Cloudflare's CDN serve the bytes.
+      return NextResponse.redirect(result.downloadUrl!, 303);
+    }
+
     return new NextResponse(toArrayBuffer(result.stl), {
       headers: {
         "Content-Disposition": `attachment; filename="${model.outputFileName}"`,

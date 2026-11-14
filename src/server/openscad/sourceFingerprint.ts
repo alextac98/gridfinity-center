@@ -3,11 +3,12 @@ import { readFile } from "fs/promises";
 import path from "path";
 import { gridfinityExtendedFiles } from "@/shared/gridfinityExtended";
 
+let sourcesPromise: Promise<(readonly [string, string])[]> | undefined;
 let sourceFingerprintPromise: Promise<string> | undefined;
 
-export async function getGridfinityExtendedSourceFingerprint() {
-  if (!sourceFingerprintPromise) {
-    sourceFingerprintPromise = Promise.all(
+export function getGridfinityExtendedSources() {
+  if (!sourcesPromise) {
+    sourcesPromise = Promise.all(
       gridfinityExtendedFiles.map(async (filePath) => {
         const sourcePath = path.join(
           process.cwd(),
@@ -18,7 +19,15 @@ export async function getGridfinityExtendedSourceFingerprint() {
         );
         return [filePath, await readFile(sourcePath, "utf8")] as const;
       }),
-    ).then((entries) => {
+    );
+  }
+
+  return sourcesPromise;
+}
+
+export async function getGridfinityExtendedSourceFingerprint() {
+  if (!sourceFingerprintPromise) {
+    sourceFingerprintPromise = getGridfinityExtendedSources().then((entries) => {
       const hash = createHash("sha256");
 
       for (const [filePath, contents] of entries) {

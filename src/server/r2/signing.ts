@@ -95,6 +95,11 @@ export function getR2Config(): R2Config | null {
   };
 }
 
+// Optional public custom domain for the bucket, e.g. https://models.example.com.
+export function getR2PublicBaseUrl() {
+  return process.env.R2_PUBLIC_BASE_URL?.trim().replace(/\/$/, "") ?? "";
+}
+
 export function createR2ObjectUrl(config: R2Config, key: string) {
   return `https://${config.accountId}.r2.cloudflarestorage.com/${config.bucketName}/${encodePath(
     key,
