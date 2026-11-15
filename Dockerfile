@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
-# Next.js app image. The native OpenSCAD render service has its own image in
-# render-service/Dockerfile; this image only serves the web app and its API routes.
+# Next.js app image. Models render in the browser; the API routes only handle
+# slicer handoffs through Cloudflare R2.
 
 FROM node:24-alpine AS base
 RUN corepack enable && corepack prepare pnpm@10 --activate
@@ -36,7 +36,7 @@ WORKDIR /app
 RUN addgroup -S nextjs && adduser -S -G nextjs nextjs
 COPY --from=build --chown=nextjs:nextjs /app/.next/standalone ./
 COPY --from=build --chown=nextjs:nextjs /app/.next/static ./.next/static
-# Served as static assets and also read at runtime by src/server for cache fingerprints.
+# Static assets, including the bundled OpenSCAD source and WebAssembly build.
 COPY --from=build --chown=nextjs:nextjs /app/public ./public
 USER nextjs
 EXPOSE 3000

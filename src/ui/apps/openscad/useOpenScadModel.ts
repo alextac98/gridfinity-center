@@ -7,23 +7,16 @@ import {
 } from "@/ui/analytics/posthog";
 import type { OpenScadDefineValue } from "@/shared/openscad-defines";
 import { createOpenScadWorker } from "@/ui/openscadWorkerClient";
+import { uploadSlicerHandoff } from "./slicerHandoff";
 import type {
   OpenScadWorkerRequest,
   OpenScadWorkerResponse,
 } from "@/shared/openscadWorkerTypes";
 
-type ModelResponse = {
-  cacheStatus: string;
-  modelUrl: string;
-  renderSource: PreviewTiming["renderSource"];
-  stl: Uint8Array;
-};
-
 type UseOpenScadModelOptions<TParams> = {
   params: TParams;
   entryFile: string;
   outputBaseName: string;
-  cacheModelId?: string;
   createDefines: (params: TParams) => Record<string, OpenScadDefineValue>;
   createParamsKey: (params: TParams) => string;
   createScadSnippet: (params: TParams) => string;
@@ -43,8 +36,6 @@ type RenderTiming = {
 };
 
 type PreviewTiming = RenderTiming & {
-  cacheStatus: string;
-  renderSource: "openscad_render" | "native_openscad" | "r2_cache" | "server_wasm";
   stl: Uint8Array;
 };
 
@@ -73,59 +64,10 @@ function writeOpenScadErrorToConsole(message: string, logs: string[]) {
   }
 }
 
-async function fetchModel<TParams>(
-  modelId: string,
-  params: TParams,
-): Promise<{ unavailable: true } | ({ unavailable: false } & ModelResponse)> {
-  const response = await fetch(`/api/openscad-models/${modelId}/model`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ params }),
-  });
-
-  if (response.status === 503) {
-    return { unavailable: true as const };
-  }
-
-  if (!response.ok) {
-    const details = await response.text().catch(() => "");
-    throw new Error(
-      `OpenSCAD model request failed with status ${response.status}: ${details}`,
-    );
-  }
-
-  // Cache hits may redirect to the public R2 URL, which doesn't carry our headers.
-  if (response.redirected) {
-    return {
-      cacheStatus: "hit",
-      modelUrl: response.url,
-      renderSource: "r2_cache",
-      unavailable: false as const,
-      stl: new Uint8Array(await response.arrayBuffer()),
-    };
-  }
-
-  const renderSource = response.headers.get("X-Render-Source");
-
-  return {
-    cacheStatus: response.headers.get("X-Model-Cache-Status") ?? "none",
-    modelUrl: response.headers.get("X-Model-Url") ?? "",
-    renderSource:
-      renderSource === "r2_cache" || renderSource === "server_wasm"
-        ? renderSource
-        : "native_openscad",
-    unavailable: false as const,
-    stl: new Uint8Array(await response.arrayBuffer()),
-  };
-}
-
 export function useOpenScadModel<TParams>({
   params,
   entryFile,
   outputBaseName,
-  cacheModelId,
   createDefines,
   createParamsKey,
   createScadSnippet,
@@ -140,8 +82,6 @@ export function useOpenScadModel<TParams>({
   );
   const [renderError, setRenderError] = useState("");
   const [isRendering, setIsRendering] = useState(true);
-  const [cachedDownloadUrl, setCachedDownloadUrl] = useState("");
-  const [cachedDownloadParamsKey, setCachedDownloadParamsKey] = useState("");
   const renderSequenceRef = useRef(0);
   const workerRef = useRef<Worker | null>(null);
   const latestParamsRef = useRef(params);
@@ -152,7 +92,6 @@ export function useOpenScadModel<TParams>({
   const activeRenderTimingRef = useRef<RenderTiming | null>(null);
   const queuedRenderTimingRef = useRef<RenderTiming | null>(null);
   const previewTimingRef = useRef<PreviewTiming | null>(null);
-  const nativeRendererUnavailableRef = useRef(false);
 
   const currentParamsKey = useMemo(
     () => createParamsKey(params),
@@ -170,13 +109,6 @@ export function useOpenScadModel<TParams>({
         : stl
           ? "Changes Pending"
           : "Ready To Generate";
-  const currentModelUrl =
-    isPreviewCurrent &&
-    cachedDownloadUrl &&
-    cachedDownloadParamsKey === currentParamsKey &&
-    typeof window !== "undefined"
-      ? new URL(cachedDownloadUrl, window.location.origin).toString()
-      : "";
 
   useEffect(() => {
     const mountTimer = window.setTimeout(() => setHasMounted(true), 0);
@@ -227,29 +159,11 @@ export function useOpenScadModel<TParams>({
     [],
   );
 
-  const preparePreviewTiming = useCallback(
-    (
-      stlBytes: Uint8Array,
-      renderSource: PreviewTiming["renderSource"],
-      cacheStatus: string,
-    ) => {
-      const timing = activeRenderTimingRef.current;
-      activeRenderTimingRef.current = null;
-
-      if (!timing) {
-        previewTimingRef.current = null;
-        return;
-      }
-
-      previewTimingRef.current = {
-        ...timing,
-        cacheStatus,
-        renderSource,
-        stl: stlBytes,
-      };
-    },
-    [],
-  );
+  const preparePreviewTiming = useCallback((stlBytes: Uint8Array) => {
+    const timing = activeRenderTimingRef.current;
+    activeRenderTimingRef.current = null;
+    previewTimingRef.current = timing ? { ...timing, stl: stlBytes } : null;
+  }, []);
 
   const markPreviewVisible = useCallback((visibleStl: Uint8Array) => {
     const timing = previewTimingRef.current;
@@ -261,15 +175,13 @@ export function useOpenScadModel<TParams>({
     previewTimingRef.current = null;
     captureEvent(timing.completionEventName, {
       ...timing.properties,
-      cache_status: timing.cacheStatus,
       duration_ms: Math.round(performance.now() - timing.startedAt),
-      render_source: timing.renderSource,
+      render_source: "openscad_render",
     });
   }, []);
 
   const requestRender = useCallback(
-    async (nextParams: TParams, options?: RenderRequestOptions) => {
-      const nextParamsKey = createParamsKey(nextParams);
+    (nextParams: TParams, options?: RenderRequestOptions) => {
       const timing = createRenderTiming(options);
       latestParamsRef.current = nextParams;
       setRenderError("");
@@ -294,49 +206,11 @@ export function useOpenScadModel<TParams>({
       queuedRenderTimingRef.current = null;
       previewTimingRef.current = null;
 
-      if (cacheModelId && !nativeRendererUnavailableRef.current) {
-        setIsRendering(true);
-        setRenderStatus("Requesting OpenSCAD model");
-
-        try {
-          const modelResponse = await fetchModel(cacheModelId, nextParams);
-
-          if (modelResponse.unavailable) {
-            nativeRendererUnavailableRef.current = true;
-          } else {
-            preparePreviewTiming(
-              modelResponse.stl,
-              modelResponse.renderSource,
-              modelResponse.cacheStatus,
-            );
-            setStl(modelResponse.stl);
-            setGeneratedParamsKey(nextParamsKey);
-            setRenderStatus("OpenSCAD Preview Ready");
-            setRenderError("");
-            setIsRendering(false);
-            setCachedDownloadUrl(modelResponse.modelUrl);
-            setCachedDownloadParamsKey(
-              modelResponse.modelUrl ? nextParamsKey : "",
-            );
-
-            return;
-          }
-        } catch (error) {
-          console.warn("OpenSCAD model request failed; rendering in browser.", error);
-        }
-      }
-
       setIsRendering(true);
       setRenderStatus("Rendering in browser with OpenSCAD WASM");
       startRender(latestParamsRef.current);
     },
-    [
-      cacheModelId,
-      createParamsKey,
-      createRenderTiming,
-      preparePreviewTiming,
-      startRender,
-    ],
+    [createRenderTiming, startRender],
   );
 
   useEffect(() => {
@@ -383,14 +257,12 @@ export function useOpenScadModel<TParams>({
 
         const stlBytes = new Uint8Array(message.stl);
         const renderedParamsKey = activeParamsKeyRef.current;
-        preparePreviewTiming(stlBytes, "openscad_render", "none");
+        preparePreviewTiming(stlBytes);
         setStl(stlBytes);
         setGeneratedParamsKey(renderedParamsKey);
         setRenderStatus("OpenSCAD Preview Ready");
         setRenderError("");
         setIsRendering(false);
-        setCachedDownloadUrl("");
-        setCachedDownloadParamsKey("");
 
         return;
       }
@@ -429,7 +301,7 @@ export function useOpenScadModel<TParams>({
     worker.addEventListener("message", handleMessage);
     worker.addEventListener("error", handleWorkerError);
     const initialRenderTimer = window.setTimeout(() => {
-      void requestRender(latestParamsRef.current);
+      requestRender(latestParamsRef.current);
     }, 0);
 
     return () => {
@@ -445,7 +317,6 @@ export function useOpenScadModel<TParams>({
       previewTimingRef.current = null;
     };
   }, [
-    cacheModelId,
     hasMounted,
     preparePreviewTiming,
     requestRender,
@@ -459,23 +330,27 @@ export function useOpenScadModel<TParams>({
   const clearGeneratedModel = () => {
     setStl(undefined);
     setGeneratedParamsKey("");
-    setCachedDownloadUrl("");
-    setCachedDownloadParamsKey("");
     previewTimingRef.current = null;
   };
-
-  const markCheckingCache = () => setRenderStatus("Checking shared model cache");
 
   const downloadStl = () => {
     if (!stl || !isPreviewCurrent) {
       return;
     }
 
-    // Use the bytes already in memory: cross-origin cache URLs ignore the download filename.
     downloadBlob(
       `${outputBaseName}.stl`,
       new Blob([toArrayBuffer(stl)], { type: "model/stl" }),
     );
+  };
+
+  // Uploads the previewed STL and returns a single-use URL for a slicer to download.
+  const createSlicerUrl = () => {
+    if (!stl || !isPreviewCurrent) {
+      return Promise.reject(new Error("Generate the model first."));
+    }
+
+    return uploadSlicerHandoff(stl, `${outputBaseName}.stl`);
   };
 
   const downloadScad = () => {
@@ -488,14 +363,13 @@ export function useOpenScadModel<TParams>({
   return {
     clearGeneratedModel,
     clearRenderError,
-    currentModelUrl,
+    createSlicerUrl,
     currentParamsKey,
     downloadScad,
     downloadStl,
     hasMounted,
     isPreviewCurrent,
     isRendering,
-    markCheckingCache,
     markPreviewVisible,
     previewStatus,
     renderError,

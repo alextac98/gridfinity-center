@@ -18,14 +18,8 @@ function getCommitSha() {
 const nextConfig: NextConfig = {
   // Standalone output is only needed for the Docker image; it makes `next start` warn.
   output: process.env.NEXT_OUTPUT_STANDALONE === "1" ? "standalone" : undefined,
-  // Files the server-side OpenSCAD WASM renderer reads at runtime.
-  outputFileTracingIncludes: {
-    "/api/openscad-models/**": [
-      "./public/openscad/gridfinity_extended_openscad/**/*.scad",
-      "./public/openscad-wasm/openscad.{js,wasm}",
-      "./src/server/openscad/wasmRenderWorker.mjs",
-    ],
-  },
+  // Let `next dev` serve devices on the local network (e.g. testing on a phone).
+  allowedDevOrigins: ["10.*.*.*", "192.168.*.*"],
   env: {
     NEXT_PUBLIC_GRIDFINITY_COMMIT_SHA: getCommitSha(),
   },

@@ -12,6 +12,8 @@ type PresignOptions = {
   key: string;
   method: "GET" | "PUT";
   expiresSeconds: number;
+  // Extra headers the request must send with exactly these values.
+  signedHeaders?: Record<string, string>;
 };
 
 const service = "s3";
@@ -95,11 +97,6 @@ export function getR2Config(): R2Config | null {
   };
 }
 
-// Optional public custom domain for the bucket, e.g. https://models.example.com.
-export function getR2PublicBaseUrl() {
-  return process.env.R2_PUBLIC_BASE_URL?.trim().replace(/\/$/, "") ?? "";
-}
-
 export function createR2ObjectUrl(config: R2Config, key: string) {
   return `https://${config.accountId}.r2.cloudflarestorage.com/${config.bucketName}/${encodePath(
     key,
@@ -111,6 +108,7 @@ export function createPresignedR2Url({
   key,
   method,
   expiresSeconds,
+  signedHeaders = {},
 }: PresignOptions) {
   const now = new Date();
   const amzDate = toAmzDate(now);
@@ -118,13 +116,16 @@ export function createPresignedR2Url({
   const credential = `${config.accessKeyId}/${getScope(dateStamp)}`;
   const host = `${config.accountId}.r2.cloudflarestorage.com`;
   const canonicalUri = `/${config.bucketName}/${encodePath(key)}`;
-  const signedHeaders = "host";
+  const headers = Object.entries({ ...signedHeaders, host })
+    .map(([name, value]) => [name.toLowerCase(), value.trim()] as const)
+    .sort(([left], [right]) => left.localeCompare(right));
+  const signedHeaderNames = headers.map(([name]) => name).join(";");
   const query = new URLSearchParams({
     "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
     "X-Amz-Credential": credential,
     "X-Amz-Date": amzDate,
     "X-Amz-Expires": String(expiresSeconds),
-    "X-Amz-SignedHeaders": signedHeaders,
+    "X-Amz-SignedHeaders": signedHeaderNames,
   });
   const canonicalQuery = [...query.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
@@ -136,8 +137,8 @@ export function createPresignedR2Url({
     method,
     canonicalUri,
     canonicalQuery,
-    `host:${host}\n`,
-    signedHeaders,
+    headers.map(([name, value]) => `${name}:${value}\n`).join(""),
+    signedHeaderNames,
     unsignedPayload,
   ].join("\n");
   const stringToSign = [
@@ -161,7 +162,7 @@ export function createPresignedR2Url({
 export function createSignedR2Headers(
   config: R2Config,
   key: string,
-  method: "HEAD" | "PUT",
+  method: "DELETE" | "HEAD" | "PUT",
   payload?: ArrayBuffer | Uint8Array,
 ) {
   const now = new Date();

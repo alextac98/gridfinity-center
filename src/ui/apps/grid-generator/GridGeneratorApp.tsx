@@ -496,7 +496,6 @@ export function GridGeneratorApp({ accent }: GridfinityAppProps) {
   const [draft, setDraft] = useState(initialSettings.draft);
   const model = useOpenScadModel({
     params,
-    cacheModelId: "grid-generator",
     entryFile: "gridfinity_baseplate.scad",
     outputBaseName: "gridfinity-baseplate",
     createDefines: createBaseplateDefines,
@@ -603,11 +602,10 @@ export function GridGeneratorApp({ accent }: GridfinityAppProps) {
     captureEvent("grid_model_reset");
     model.clearRenderError();
     model.clearGeneratedModel();
-    model.markCheckingCache();
     setParams(defaultParams);
     setDraft(defaultDraft);
     writeStoredGridSettings(defaultParams, defaultDraft);
-    void model.requestRender(defaultParams);
+    model.requestRender(defaultParams);
   };
 
   if (!model.hasMounted) {
@@ -654,7 +652,7 @@ export function GridGeneratorApp({ accent }: GridfinityAppProps) {
           onGenerate={() => {
             const analyticsProperties = createGridAnalyticsProperties(params);
             captureEvent("grid_model_generate_requested", analyticsProperties);
-            void model.requestRender(params, {
+            model.requestRender(params, {
               completionEventName: "grid_model_preview_ready",
               properties: analyticsProperties,
             });
@@ -680,7 +678,7 @@ export function GridGeneratorApp({ accent }: GridfinityAppProps) {
         <ModelOutputPanel
           modelSummary={`${params.widthUnits} x ${params.depthUnits} baseplate`}
           dimensions={dimensions}
-          currentModelUrl={model.currentModelUrl}
+          onCreateSlicerUrl={model.createSlicerUrl}
           floorMode={groundPlane.preference.floorMode}
           groundPlaneDepthMm={groundPlane.preference.depthMm}
           groundPlaneWidthMm={groundPlane.preference.widthMm}

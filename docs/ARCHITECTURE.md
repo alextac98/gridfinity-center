@@ -7,9 +7,8 @@ Gridfinity Center is a single Next.js app that hosts multiple tools inside one p
 ```txt
 src/app/       Next.js pages, layouts, metadata, and API route entrypoints
 src/ui/        Browser-facing shell, apps, workers, analytics, and UI primitives
-src/server/    Server-only model rendering, cache, signing, and fingerprint code
+src/server/    Server-only slicer handoff and R2 signing code
 src/shared/    Types, constants, and pure helpers safe for server and browser imports
-render-service Optional standalone native OpenSCAD HTTP service
 public/        Static assets and bundled OpenSCAD source
 tests/e2e/     Playwright browser tests
 ```
@@ -30,72 +29,41 @@ OpenSCAD-backed tools follow the same broad pattern:
 User changes parameters
 -> tool builds normalized parameter state
 -> shared OpenSCAD generator shell renders controls, preview, and output actions
--> useOpenScadModel decides how to render or download
+-> useOpenScadModel renders in a browser worker and handles downloads
 -> model preview displays the generated STL with Three.js
 ```
 
-Both server and browser rendering use the official OpenSCAD WebAssembly build vendored in `public/openscad-wasm/` (see `SOURCES.md` there). It uses the Manifold backend and writes binary STL.
+Models render only in the browser, with the official OpenSCAD WebAssembly build vendored in `public/openscad-wasm/` (see `SOURCES.md` there). It uses the Manifold backend and writes binary STL.
 
-The browser path uses `src/ui/openscad.worker.ts` and `src/ui/openscadClient.ts`. The worker loads the bundled Gridfinity Extended OpenSCAD files from `public/openscad/gridfinity_extended_openscad`, writes them into the OpenSCAD WASM filesystem, applies `-D` defines, and returns STL bytes to the UI. It is the fallback when the server responds with 503 or the request fails.
+`src/ui/openscad.worker.ts` and `src/ui/openscadClient.ts` load the bundled Gridfinity Extended OpenSCAD files from `public/openscad/gridfinity_extended_openscad`, write them into the OpenSCAD WASM filesystem, apply `-D` defines, and return STL bytes to the UI. Download STL saves those bytes directly.
 
-## API Design
+## Slicer Handoff
 
-API route files live under `src/app/api/openscad-models/[modelId]/...` and stay thin. They delegate model validation, cache key creation, rendering, and R2 signing to `src/server/`.
-
-The main model request flow is:
+Slicers' "open" links need an HTTPS URL to download from, so "Open In OrcaSlicer" and "Open In Bambu Slicer" briefly hand the previewed STL to the server through Cloudflare R2. PrusaSlicer is not offered because it only downloads from Printables and Thingiverse.
 
 ```txt
-POST /api/openscad-models/:modelId/model
--> validate modelId and params
--> compute source fingerprint
--> compute canonical settings hash
--> try R2 cache if configured
-   (with R2_PUBLIC_BASE_URL set, a hit is a 303 redirect to the public bucket URL)
--> render on cache miss (server WASM, or the native service when NATIVE_RENDER_URL is set)
--> return STL bytes plus cache/render headers
--> upload rendered STL to R2 after the response is sent
+POST /api/slicer-handoff { size, fileName }
+-> validate the size is a binary STL under the cap
+-> return a 5 minute R2 upload URL for handoff/<random-id>.stl, signed for exactly that Content-Length
+-> return /api/slicer-handoff/<random-id>/<fileName> as the download URL
+Browser PUTs the STL straight to R2, then opens orcaslicer://open?file=<download URL>
+GET /api/slicer-handoff/:id/:fileName
+-> 410 unless the object exists and was uploaded under 5 minutes ago
+-> read it, then delete it, so every link works once
+-> 422 unless it is an OpenSCAD binary STL (header, exact size, finite in-range floats)
+-> return the bytes as an attachment
 ```
 
-## Server WASM Rendering
+`HEAD` on the download URL checks the handoff without using it up. The route lives in `src/app/api/slicer-handoff/`, and the logic and STL checks in `src/server/slicerHandoff/`. The bucket stays private: the browser can only write one object per signed URL, and only the download route reads objects back.
 
-`src/server/openscad/wasmRenderer.ts` compiles `public/openscad-wasm/openscad.wasm` once per server instance, then runs each render in a fresh worker thread (`wasmRenderWorker.mjs`). Workers keep long renders off the event loop, are terminated after a 120 second timeout, and release their WASM memory when they exit. `next.config.ts` adds these files to the API routes' output file tracing so they are deployed with the functions.
+If the upload takes longer than a few seconds, the browser may no longer let the page open another app, so the output button switches to "Click To Open In ..." instead of opening the slicer itself.
 
-Related routes expose cached object access and model URLs for download behavior. Server code validates cache object keys before signing or proxying cache objects.
+### R2 Setup
 
-## Native Render Service
-
-The optional native render service in `render-service/server.mjs` is a small Node HTTP service around the OpenSCAD CLI. The app uses it instead of server WASM only when `NATIVE_RENDER_URL` is set.
-
-```txt
-Next API
--> POST /v1/render with bearer token, modelId, entryFile, outputFileName, defines
--> render service validates the request against known models
--> render service queues work based on concurrency settings
--> OpenSCAD CLI writes an STL into a temporary directory
--> service returns STL bytes and render timing headers
-```
-
-The service intentionally accepts only known model IDs and matching entry/output files. That keeps the HTTP API narrow: the Next app owns parameter validation and model definitions, while the render service owns authenticated native rendering and queue control.
-
-## R2 Cache Flow
-
-The cache key is derived from:
-
-- the cache model name
-- a fingerprint of the bundled OpenSCAD source
-- a stable hash of canonicalized model settings
-
-The resulting object key has this shape:
-
-```txt
-models/<cache-model>/source-<source-fingerprint>/<settings-hash>.stl
-```
-
-Because the source fingerprint is part of the path, changing bundled OpenSCAD source naturally creates a new cache namespace. Existing cached files can remain in R2 without being served for newer source revisions.
-
-The browser does not upload directly to R2. It asks the Next API for a model, and the server handles cache reads, rendering, cache uploads, and signed object access.
-
-Uploaded objects get `Cache-Control: public, max-age=31536000, immutable`, because a key's contents never change. To serve cache hits from Cloudflare's CDN instead of through the app, connect a custom domain to the bucket and set `R2_PUBLIC_BASE_URL` to it. The bucket also needs a CORS policy that allows `GET` from the app's origin, because the browser follows the redirect with `fetch`. Slicer links and the preview then use the public URL directly. If the redirect fetch fails, the client falls back to browser rendering.
+- Set `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, and `R2_BUCKET_NAME`. Without them the slicer buttons show an error and downloads still work.
+- Add an object lifecycle rule that deletes `handoff/` objects after 1 day, for uploads that were never opened.
+- Add a CORS rule allowing `PUT` from the app's origins.
+- Optionally add a Vercel Firewall rate limit rule on `POST /api/slicer-handoff`.
 
 ## Adding A New OpenSCAD-Backed Generator
 
@@ -104,8 +72,6 @@ A new generator usually needs changes in these places:
 - `src/ui/apps/<new-app>/` for controls, state, labels, and the tool component
 - `src/ui/shell/appRegistry.ts` to register the app in the shell
 - `src/shared/` for parameter types, constants, and OpenSCAD define helpers shared by browser and server code
-- `src/server/openscad/` for cache model definitions and server-side parameter validation
-- `render-service/server.mjs` if the native service needs to recognize a new model ID
 - `tests/e2e/` for focused browser coverage when the change affects navigation or user-visible behavior
 
 Keep app-specific behavior inside the app folder. Promote code into shared UI primitives or `src/shared/` only after there is a concrete second use.
@@ -118,8 +84,4 @@ Use app-local CSS Modules for tool-specific layout and styling. Use `src/ui/comp
 
 ## Deployment Shape
 
-The Next.js app renders models itself with server WASM, so it needs no separate render service. Production deployments can add:
-
-- the native render service, by setting `NATIVE_RENDER_URL`
-- Cloudflare R2 for shared STL caching
-- the render-service GitHub workflow for Docker image publishing and VPS deployment
+The Next.js app deploys as a single app (on Vercel, or with the root `Dockerfile`). Rendering happens in the browser, so the server only signs and serves slicer handoffs, which need Cloudflare R2.
