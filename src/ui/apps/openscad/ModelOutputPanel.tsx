@@ -27,10 +27,7 @@ export type ModelDimensions = {
   height: number;
 };
 
-type SlicerActionId =
-  | "open-prusaslicer"
-  | "open-orcaslicer"
-  | "open-bambu-slicer";
+type SlicerActionId = "open-orcaslicer" | "open-bambu-slicer";
 type OutputActionId = "download-stl" | SlicerActionId | "download-scad";
 
 type SlicerLauncher = {
@@ -51,7 +48,6 @@ type BuildPlatePreset = {
 type ModelOutputPanelProps = {
   modelSummary: string;
   dimensions: ModelDimensions | null;
-  currentModelUrl: string;
   groundPlaneDepthMm: string;
   groundPlaneWidthMm: string;
   floorMode: "grid" | "build-plate";
@@ -60,6 +56,7 @@ type ModelOutputPanelProps = {
   onBuildPlatePresetSelect: (preset: BuildPlatePreset) => void;
   onDownloadStl: () => void;
   onDownloadScad: () => void;
+  onCreateSlicerUrl: () => Promise<string>;
   onFloorModeChange: (mode: "grid" | "build-plate") => void;
   onGroundPlaneDepthChange: (value: string) => void;
   onGroundPlaneWidthChange: (value: string) => void;
@@ -110,15 +107,8 @@ const buildPlatePresets: BuildPlatePreset[] = [
   { id: "bambu-h2s", label: "Bambu H2S", widthMm: 340, depthMm: 320 },
 ];
 
+// PrusaSlicer is not offered: it only opens links from Printables and Thingiverse.
 const slicerLaunchers: SlicerLauncher[] = [
-  {
-    id: "open-prusaslicer",
-    label: "PrusaSlicer",
-    actionLabel: "Open In PrusaSlicer",
-    iconClass: styles.prusaSlicerIcon,
-    createUrl: (modelUrl) =>
-      `prusaslicer://open?file=${encodeURIComponent(modelUrl)}`,
-  },
   {
     id: "open-orcaslicer",
     label: "OrcaSlicer",
@@ -149,12 +139,13 @@ const slicerLaunchers: SlicerLauncher[] = [
 function isOutputActionId(value: string | null): value is OutputActionId {
   return (
     value === "download-stl" ||
-    value === "open-prusaslicer" ||
     value === "open-orcaslicer" ||
     value === "open-bambu-slicer" ||
     value === "download-scad"
   );
 }
+
+const slicerLaunchWindowMs = 4000;
 
 function openExternalUrl(url: string) {
   const link = document.createElement("a");
@@ -166,7 +157,6 @@ function openExternalUrl(url: string) {
 export function ModelOutputPanel({
   modelSummary,
   dimensions,
-  currentModelUrl,
   groundPlaneDepthMm,
   groundPlaneWidthMm,
   floorMode,
@@ -175,6 +165,7 @@ export function ModelOutputPanel({
   onBuildPlatePresetSelect,
   onDownloadStl,
   onDownloadScad,
+  onCreateSlicerUrl,
   onFloorModeChange,
   onGroundPlaneDepthChange,
   onGroundPlaneWidthChange,
@@ -193,6 +184,19 @@ export function ModelOutputPanel({
       return isOutputActionId(storedAction) ? storedAction : "download-stl";
     });
   const [isOutputMenuOpen, setIsOutputMenuOpen] = useState(false);
+  const [isSendingToSlicer, setIsSendingToSlicer] = useState(false);
+  // Set when an upload took too long for the browser to open the slicer itself.
+  const [pendingSlicerUrl, setPendingSlicerUrl] = useState("");
+  const [wasPreviewCurrent, setWasPreviewCurrent] = useState(isPreviewCurrent);
+
+  // A pending link belongs to the previewed model, so drop it once the model changes.
+  if (wasPreviewCurrent !== isPreviewCurrent) {
+    setWasPreviewCurrent(isPreviewCurrent);
+
+    if (!isPreviewCurrent) {
+      setPendingSlicerUrl("");
+    }
+  }
   const [isBuildPlatePresetMenuOpen, setIsBuildPlatePresetMenuOpen] =
     useState(false);
   const outputMenuRef = useRef<HTMLDivElement | null>(null);
@@ -256,23 +260,21 @@ export function ModelOutputPanel({
       ? "Download STL"
       : selectedOutputAction === "download-scad"
         ? "Download OpenSCAD"
-        : (selectedSlicerLauncher?.actionLabel ?? "Download STL");
+        : isSendingToSlicer
+          ? "Sending To Slicer..."
+          : pendingSlicerUrl
+            ? `Click To ${selectedSlicerLauncher?.actionLabel}`
+            : (selectedSlicerLauncher?.actionLabel ?? "Download STL");
   const unavailableOutputActionText =
     selectedOutputAction === "download-stl"
       ? "downloading STL"
-      : selectedOutputAction === "open-prusaslicer"
-        ? "opening in PrusaSlicer"
-        : selectedOutputAction === "open-orcaslicer"
-          ? "opening in OrcaSlicer"
-          : selectedOutputAction === "open-bambu-slicer"
-            ? "opening in Bambu Slicer"
-            : "continuing";
+      : selectedOutputAction === "open-orcaslicer"
+        ? "opening in OrcaSlicer"
+        : selectedOutputAction === "open-bambu-slicer"
+          ? "opening in Bambu Slicer"
+          : "continuing";
   const isSelectedOutputEnabled =
-    selectedOutputAction === "download-stl"
-      ? isPreviewCurrent
-      : selectedOutputAction === "download-scad"
-        ? true
-        : Boolean(currentModelUrl && selectedSlicerLauncher);
+    selectedOutputAction === "download-scad" || isPreviewCurrent;
   const selectedOutputTitle = !isSelectedOutputEnabled
     ? "Generate Model First"
     : selectedOutputAction === "download-stl"
@@ -284,6 +286,7 @@ export function ModelOutputPanel({
   const selectOutputAction = (action: OutputActionId) => {
     setSelectedOutputAction(action);
     setIsOutputMenuOpen(false);
+    setPendingSlicerUrl("");
     window.localStorage.setItem(storageKey, action);
   };
 
@@ -326,13 +329,43 @@ export function ModelOutputPanel({
       return;
     }
 
-    if (selectedSlicerLauncher && currentModelUrl) {
+    if (pendingSlicerUrl) {
+      setPendingSlicerUrl("");
+      openExternalUrl(pendingSlicerUrl);
+      return;
+    }
+
+    if (selectedSlicerLauncher && !isSendingToSlicer) {
       captureEvent("model_output_action_performed", {
         action: selectedOutputAction,
         slicer: selectedSlicerLauncher.label,
         model_summary: modelSummary,
       });
-      openExternalUrl(selectedSlicerLauncher.createUrl(currentModelUrl));
+      void sendToSlicer(selectedSlicerLauncher);
+    }
+  };
+
+  const sendToSlicer = async (launcher: SlicerLauncher) => {
+    const startedAt = performance.now();
+    setIsSendingToSlicer(true);
+
+    try {
+      const slicerUrl = launcher.createUrl(await onCreateSlicerUrl());
+
+      // Browsers may refuse to open another app once the click is a few seconds old.
+      if (performance.now() - startedAt < slicerLaunchWindowMs) {
+        openExternalUrl(slicerUrl);
+      } else {
+        setPendingSlicerUrl(slicerUrl);
+      }
+    } catch (error) {
+      console.error("Sending the model to the slicer failed.", error);
+      showToast(
+        `Could not send the model to ${launcher.label}. Try again, or download the STL.`,
+        { variant: "warning" },
+      );
+    } finally {
+      setIsSendingToSlicer(false);
     }
   };
 
@@ -485,6 +518,7 @@ export function ModelOutputPanel({
             <button
               className={styles.primaryOutputButton}
               type="button"
+              aria-busy={isSendingToSlicer}
               aria-disabled={!isSelectedOutputEnabled}
               onClick={runSelectedOutputAction}
               title={selectedOutputTitle}

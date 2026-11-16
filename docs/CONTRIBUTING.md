@@ -22,7 +22,7 @@ Pull requests should describe:
 
 - Node.js compatible with the checked-in Next.js version
 - pnpm
-- Docker, only when running the native OpenSCAD render service locally
+- Docker, only when building the production image locally
 
 Install dependencies:
 
@@ -32,43 +32,11 @@ pnpm install
 
 ## Local UI Development
 
-Run the app with browser OpenSCAD WASM only:
-
 ```bash
-NATIVE_RENDER_DISABLED=1 pnpm dev
-```
-
-Open [http://localhost:3000](http://localhost:3000).
-
-This is the simplest mode for UI work. It exercises the app shell, generators, parameter panels, previews, local state, and browser rendering fallback without requiring the native render service.
-
-## Local Backend Development
-
-Run the native render service:
-
-```bash
-RENDER_AUTH_TOKEN=dev-secret pnpm render-service:dev
-```
-
-In another terminal, run the Next.js app against that service:
-
-```bash
-NATIVE_RENDER_URL=http://localhost:8080 \
-NATIVE_RENDER_TOKEN=dev-secret \
 pnpm dev
 ```
 
-The native service exposes:
-
-- `GET /healthz` for health and queue state
-- `POST /v1/render` for authenticated OpenSCAD renders
-
-You can also build and run the render service with Docker:
-
-```bash
-docker build -f render-service/Dockerfile -t gridfinity-render-service .
-docker run --rm -p 8080:8080 -e RENDER_AUTH_TOKEN=dev-secret gridfinity-render-service
-```
+Open [http://localhost:3000](http://localhost:3000). Models render in the browser with OpenSCAD WASM; no other service is needed. The "Open In" slicer buttons also need the R2 variables below.
 
 ## Docker
 
@@ -76,22 +44,18 @@ The root `Dockerfile` builds the Next.js app as a standalone production image. P
 
 ```bash
 docker build --build-arg GRIDFINITY_COMMIT_SHA="$(git rev-parse HEAD)" -t gridfinity-center .
-docker run --rm -p 3000:3000 \
-  -e NATIVE_RENDER_URL=http://host.docker.internal:8080 \
-  -e NATIVE_RENDER_TOKEN=dev-secret \
-  --add-host=host.docker.internal:host-gateway \
-  gridfinity-center
+docker run --rm -p 3000:3000 gridfinity-center
 ```
 
 `NEXT_PUBLIC_*` values are inlined at build time, so pass `NEXT_PUBLIC_POSTHOG_KEY` as a build arg rather than a runtime variable.
 
-To run the app and the render service together for local testing:
+Or use the compose file:
 
 ```bash
 GRIDFINITY_COMMIT_SHA="$(git rev-parse HEAD)" docker compose up --build
 ```
 
-The app is served on [http://localhost:3000](http://localhost:3000). The render service is only reachable from the web container. Set `WEB_PORT` to publish the app on a different host port, and export the `R2_*` variables to exercise the R2 cache. The compose file is for testing only, not deployment.
+The app is served on [http://localhost:3000](http://localhost:3000). Set `WEB_PORT` to publish the app on a different host port, and export the `R2_*` variables to exercise the slicer handoff. The compose file is for testing only, not deployment.
 
 ## Common Commands
 
@@ -101,7 +65,6 @@ pnpm lint
 pnpm build
 pnpm test:e2e
 pnpm test:e2e:ui
-pnpm render-service:dev
 ```
 
 Use `pnpm test:e2e` for browser-level regression coverage. Use `pnpm test:e2e:ui` when debugging a Playwright flow interactively.
@@ -114,37 +77,17 @@ Use `pnpm test:e2e` for browser-level regression coverage. Use `pnpm test:e2e:ui
 - `src/ui/shell/appRegistry.ts` is the source of truth for tools shown in the shell.
 - `src/server/` owns server-only code used by API routes.
 - `src/shared/` contains code safe to import from both server and browser code.
-- `render-service/` contains the standalone native OpenSCAD render service.
 - `tests/e2e/` contains Playwright tests.
 
 ## Adding Or Changing A Tool
 
 Work inside `src/ui/apps/<app-name>/` unless the change needs shared behavior. Register new tools in `src/ui/shell/appRegistry.ts`.
 
-For OpenSCAD-backed generators, keep parameter normalization, browser defines, server cache definitions, and render-service model IDs aligned. The Architecture doc explains the data flow at a higher level: [docs/ARCHITECTURE.md](ARCHITECTURE.md).
+For OpenSCAD-backed generators, keep parameter normalization and browser defines aligned. The Architecture doc explains the data flow at a higher level: [docs/ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Environment Variables
 
-Native rendering:
-
-```bash
-NATIVE_RENDER_URL=http://localhost:8080
-NATIVE_RENDER_TOKEN=dev-secret
-NATIVE_RENDER_DISABLED=1
-```
-
-Render service:
-
-```bash
-RENDER_AUTH_TOKEN=dev-secret
-RENDER_MAX_CONCURRENCY=1
-RENDER_MAX_QUEUE_LENGTH=10
-RENDER_TIMEOUT_MS=120000
-OPENSCAD_BIN=/usr/bin/openscad
-OPENSCAD_ENABLE_TEXTMETRICS=0
-```
-
-Cloudflare R2 model cache:
+Cloudflare R2, for the slicer handoff (see the Slicer Handoff section of ARCHITECTURE.md for bucket setup):
 
 ```bash
 R2_ACCOUNT_ID=

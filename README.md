@@ -10,7 +10,7 @@ Gridfinity Center is a browser-based workspace for generating Gridfinity bins, g
 
 ## How It Works
 
-Gridfinity Center uses bundled OpenSCAD models to generate STL models from the parameters you choose in the UI. For fast full model generation, the app defaults to using a native OpenSCAD render service, but will fall back to a WebAssembly version of OpenSCAD running in the browser if the render service is unavailable.
+Gridfinity Center uses bundled OpenSCAD models to generate STL models from the parameters you choose in the UI. Models are rendered in your browser with the official OpenSCAD WebAssembly build.
 
 ## Interested In Contributing?
 
@@ -28,7 +28,7 @@ For setup, common commands, and pull request expectations, see [docs/CONTRIBUTIN
 ## Documentation
 
 - [Contributing](docs/CONTRIBUTING.md): local setup, common commands, GitHub workflow, UI development, and backend development.
-- [Architecture](docs/ARCHITECTURE.md): high-level app structure, frontend data flow, API design, native rendering, and R2 cache flow.
+- [Architecture](docs/ARCHITECTURE.md): high-level app structure, frontend data flow, API design, and slicer handoff.
 - [Slicer icon sources](public/slicer-icons/SOURCES.md): source notes for bundled slicer icons.
 
 ## Attribution

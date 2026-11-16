@@ -889,10 +889,6 @@
     box-shadow: inset 0 0 0 1px rgb(0 0 0 / 12%);
 }
 
-.prusaSlicerIcon {
-    background-image: url("/slicer-icons/prusaslicer.png");
-}
-
 .orcaSlicerIcon {
     background-image: url("/slicer-icons/orcaslicer.png");
 }

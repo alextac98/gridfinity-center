@@ -10,7 +10,7 @@
 This is one Next.js app that hosts multiple Gridfinity tools. Keep it as a single deployable app unless there is a concrete need for separate packages or deployments.
 
 - `src/app/` is only for Next.js route entrypoints, layout, metadata, and global CSS. Keep route files thin.
-- `src/server/` owns server-only code used by API routes, including R2 signing, OpenSCAD cache keys, source fingerprints, and native render orchestration.
+- `src/server/` owns server-only code used by API routes, including R2 signing and the slicer handoff.
 - `src/ui/` owns browser-facing UI code, including the product shell, tool implementations, analytics client setup, browser workers, and shared UI primitives.
 - `src/ui/shell/appRegistry.ts` is the source of truth for which apps are available in the shell.
 - `src/ui/apps/<app-name>/` owns each tool implementation. Put app-specific components, helpers, state, and types inside that app folder.

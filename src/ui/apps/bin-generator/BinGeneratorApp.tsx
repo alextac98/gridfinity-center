@@ -339,7 +339,6 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
   const renderParams = useMemo(() => createRenderParams(params), [params]);
   const model = useOpenScadModel({
     params: renderParams,
-    cacheModelId: "bin-generator",
     entryFile: "gridfinity_basic_cup.scad",
     outputBaseName: "gridfinity-bin",
     createDefines: createBinDefines,
@@ -372,11 +371,10 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
     captureEvent("bin_model_reset");
     model.clearRenderError();
     model.clearGeneratedModel();
-    model.markCheckingCache();
     setParams(defaultParams);
     setDraft(defaultDraft);
     writeStoredBinSettings(defaultParams, defaultDraft);
-    void model.requestRender(defaultRenderParams);
+    model.requestRender(defaultRenderParams);
   };
 
   if (!model.hasMounted) {
@@ -423,7 +421,7 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
           onGenerate={() => {
             const analyticsProperties = createBinAnalyticsProperties(params);
             captureEvent("bin_model_generate_requested", analyticsProperties);
-            void model.requestRender(renderParams, {
+            model.requestRender(renderParams, {
               completionEventName: "bin_model_preview_ready",
               properties: analyticsProperties,
             });
@@ -449,7 +447,7 @@ export function BinGeneratorApp({ accent }: GridfinityAppProps) {
         <ModelOutputPanel
           modelSummary={`${params.widthUnits}${params.widthUnit} x ${params.depthUnits}${params.depthUnit} x ${params.heightUnits}${params.heightUnit} bin`}
           dimensions={dimensions}
-          currentModelUrl={model.currentModelUrl}
+          onCreateSlicerUrl={model.createSlicerUrl}
           floorMode={groundPlane.preference.floorMode}
           groundPlaneDepthMm={groundPlane.preference.depthMm}
           groundPlaneWidthMm={groundPlane.preference.widthMm}

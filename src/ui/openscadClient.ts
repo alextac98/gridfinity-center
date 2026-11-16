@@ -18,13 +18,11 @@ type OpenScadRuntime = {
 };
 
 type OpenScadModule = {
-  createOpenSCAD(options?: {
+  default(options?: {
     noInitialRun?: boolean;
     print?: (text: string) => void;
     printErr?: (text: string) => void;
-  }): Promise<{
-    getInstance(): OpenScadRuntime;
-  }>;
+  }): Promise<OpenScadRuntime>;
 };
 
 type RenderOptions = {
@@ -37,15 +35,19 @@ let sourcesPromise: Promise<Record<string, string>> | undefined;
 let preparedRuntimePromise: Promise<OpenScadRuntime> | undefined;
 let openScadLogs: string[] = [];
 
+// Official OpenSCAD WASM build served from public/; see public/openscad-wasm/SOURCES.md.
+const openScadModuleUrl = "/openscad-wasm/openscad.js";
+
 async function createOpenScadRuntime() {
-  const { createOpenSCAD } = (await import("openscad-wasm")) as OpenScadModule;
-  const instance = await createOpenSCAD({
+  const { default: createOpenSCAD } = (await import(
+    /* webpackIgnore: true */ /* turbopackIgnore: true */ openScadModuleUrl
+  )) as OpenScadModule;
+
+  return createOpenSCAD({
     noInitialRun: true,
     print: (text) => openScadLogs.push(text),
     printErr: (text) => openScadLogs.push(text),
   });
-
-  return instance.getInstance();
 }
 
 function createOpenScadError(message: string, cause?: unknown) {
@@ -171,6 +173,7 @@ export async function renderOpenScadToStl({
   try {
     exitCode = openScad.callMain([
       "--enable=textmetrics",
+      "--export-format=binstl",
       ...defineArgs,
       `/${entryFile}`,
       "-o",
